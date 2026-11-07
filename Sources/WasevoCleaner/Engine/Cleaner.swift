@@ -38,7 +38,7 @@ func human(_ b: Int64) -> String {
     if b <= 0 { return "empty" }
     let u = ["B", "KB", "MB", "GB", "TB"]
     var d = Double(b), i = 0
-    while d >= 1024 && i < u.count - 1 { d /= 1024; i += 1 }
+    while d >= 1000 && i < u.count - 1 { d /= 1000; i += 1 }  // decimal, like Finder
     return String(format: i >= 3 ? "%.1f %@" : "%.0f %@", d, u[i])
 }
 
@@ -62,7 +62,7 @@ func isSafeTarget(_ path: String) -> Bool {
                      h("~/Library/Application Support"), h("~/Local Sites"), h("~/.cargo"), h("~/.npm")]
     if p.isEmpty || protected.contains(p) { return false }
     if p.contains("/.git/") || p.hasSuffix("/.git") { return false }
-    if protectedReason(p) != nil { return false }
+    if protectedReason(p) != nil || protectedReason(p + "/") != nil { return false }
     let tmpRoot = URL(fileURLWithPath: NSTemporaryDirectory()).deletingLastPathComponent().path
     return p.hasPrefix(home + "/") || p.hasPrefix(tmpRoot + "/") || p.hasPrefix("/private" + tmpRoot + "/")
 }
@@ -86,24 +86,33 @@ func removePath(_ path: String, _ mode: DeleteMode) -> Bool {
     }
 }
 
-/// The concrete items a rule would remove (respecting skip/extension/age filters).
+/// The concrete items a rule would remove (respecting skip/extension/age/depth filters).
 func ruleTargets(_ r: CacheRule) -> [String] {
     let fm = FileManager.default
     var out: [String] = []
-    for raw in r.paths {
-        let full = h(raw)
-        guard fm.fileExists(atPath: full) else { continue }
-        guard r.contentsOnly else { out.append(full); continue }
-        for k in (try? fm.contentsOfDirectory(atPath: full)) ?? [] {
-            if k == ".DS_Store" || r.skipPrefixes.contains(where: { k.hasPrefix($0) }) { continue }
-            let p = (full as NSString).appendingPathComponent(k)
+    func walk(_ dir: String, _ level: Int) {
+        for k in (try? fm.contentsOfDirectory(atPath: dir)) ?? [] {
+            if k == ".DS_Store" || r.skipPrefixes.contains(where: { k.hasPrefix($0) })
+                || r.skipContaining.contains(where: { k.contains($0) }) { continue }
+            let p = (dir as NSString).appendingPathComponent(k)
+            if level < r.depth {
+                var isDir: ObjCBool = false
+                if fm.fileExists(atPath: p, isDirectory: &isDir), isDir.boolValue { walk(p, level + 1) }
+                continue
+            }
             if !r.onlyExtensions.isEmpty && !r.onlyExtensions.contains((k as NSString).pathExtension.lowercased()) { continue }
             if r.olderThanDays > 0 {
                 let m = (try? fm.attributesOfItem(atPath: p))?[.modificationDate] as? Date ?? Date()
                 if -m.timeIntervalSinceNow < r.olderThanDays * 86400 { continue }
             }
+            if protectedReason(p) != nil { continue }
             out.append(p)
         }
+    }
+    for raw in r.paths {
+        let full = h(raw)
+        guard fm.fileExists(atPath: full) else { continue }
+        if r.contentsOnly { walk(full, 1) } else if protectedReason(full) == nil { out.append(full) }
     }
     return out
 }

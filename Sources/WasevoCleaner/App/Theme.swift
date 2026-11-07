@@ -145,6 +145,7 @@ struct Card<Content: View>: View {
     @ViewBuilder let content: Content
     var body: some View {
         content
+            .frame(maxWidth: .infinity, alignment: .leading)
             .padding(18)
             .background(RoundedRectangle(cornerRadius: 16).fill(W.panel))
             .overlay(RoundedRectangle(cornerRadius: 16).stroke(W.line, lineWidth: 1))

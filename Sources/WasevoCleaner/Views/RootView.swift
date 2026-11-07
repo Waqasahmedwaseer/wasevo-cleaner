@@ -3,11 +3,15 @@ import SwiftUI
 // App shell: branded sidebar + page.
 
 enum Page: String, CaseIterable, Identifiable {
-    case scan = "Smart Scan", large = "Large Files", protected = "Protected", history = "History", settings = "Settings"
+    case scan = "Smart Scan", map = "Space Map", projects = "Projects", uninstaller = "Uninstaller"
+    case large = "Large Files", protected = "Protected", history = "History", settings = "Settings"
     var id: String { rawValue }
     var icon: String {
         switch self {
         case .scan: return "sparkles"
+        case .map: return "square.grid.2x2"
+        case .projects: return "folder"
+        case .uninstaller: return "trash.square"
         case .large: return "doc.text.magnifyingglass"
         case .protected: return "lock.shield"
         case .history: return "clock.arrow.circlepath"
@@ -26,6 +30,9 @@ struct RootView: View {
             Group {
                 switch page {
                 case .scan: ScanView()
+                case .map: SpaceMapView()
+                case .projects: ProjectsView()
+                case .uninstaller: UninstallerView()
                 case .large: LargeFilesView()
                 case .protected: ProtectedView()
                 case .history: HistoryView()
@@ -61,7 +68,7 @@ struct RootView: View {
                     Spacer()
                 }
                 .foregroundColor(page == p ? .white : W.muted)
-                .padding(.horizontal, 12).padding(.vertical, 10)
+                .padding(.horizontal, 12).padding(.vertical, 8)
                 .background(RoundedRectangle(cornerRadius: 10).fill(page == p ? W.orange : Color.clear))
                 .contentShape(Rectangle())
                 .onTapGesture { page = p }

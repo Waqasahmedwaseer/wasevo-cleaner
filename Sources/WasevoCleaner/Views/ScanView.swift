@@ -210,7 +210,7 @@ struct ItemRow: View {
                 Button { revealInFinder(p) } label: { Image(systemName: "magnifyingglass") }
                     .buttonStyle(.plain).foregroundColor(W.muted).help("Show in Finder")
             }
-            Text(item.size > 0 ? human(item.size) : "—").font(W.body(13, .semibold)).foregroundColor(W.muted)
+            Text(item.size > 0 ? human(item.size) : (item.isTool ? "varies" : "—")).font(W.body(13, .semibold)).foregroundColor(W.muted)
                 .frame(width: 80, alignment: .trailing)
         }
         .padding(.horizontal, 22).padding(.vertical, 11)

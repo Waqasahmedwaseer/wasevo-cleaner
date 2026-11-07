@@ -154,6 +154,9 @@ struct SettingsView: View {
     @AppStorage("projectRoots") private var roots = ""
     @AppStorage("deleteMode") private var permanent = true
     @State private var login = SMAppService.mainApp.status == .enabled
+    @AppStorage("autoClean") private var auto = AutoSchedule.off.rawValue
+    @EnvironmentObject var store: Store
+    @State private var autoResult: String?
 
     var body: some View {
         VStack(spacing: 0) {
@@ -162,22 +165,45 @@ struct SettingsView: View {
                 VStack(spacing: 12) {
                     Card {
                         VStack(alignment: .leading, spacing: 14) {
-                            Stepper(value: $staleDays, in: 3...180, step: 1) {
-                                SettingLabel("A project is \"old\" after \(Int(staleDays)) days", "Build files of old projects are pre-selected in Smart Scan.")
+                            SettingRow("A project is \"old\" after \(Int(staleDays)) days", "Build files of old projects are pre-selected in Smart Scan.") {
+                                Stepper("", value: $staleDays, in: 3...180, step: 1).labelsHidden()
                             }
-                            Stepper(value: $lowSpaceGB, in: 5...100, step: 5) {
-                                SettingLabel("Warn when free space is below \(Int(lowSpaceGB)) GB", "Shown in the menu bar.")
+                            Divider().overlay(W.line)
+                            SettingRow("Warn when free space is below \(Int(lowSpaceGB)) GB", "Shown in the menu bar.") {
+                                Stepper("", value: $lowSpaceGB, in: 5...100, step: 5).labelsHidden()
                             }
-                            Toggle(isOn: $permanent) {
-                                SettingLabel("Default: delete now (frees space)", "Off = move to Trash by default.")
+                            Divider().overlay(W.line)
+                            SettingRow("Default: delete now (frees space)", "Off = move to Trash by default.") {
+                                Toggle("", isOn: $permanent).labelsHidden()
                             }
-                            Toggle(isOn: $login) { SettingLabel("Open at login", "Keeps the menu-bar disk monitor running.") }
-                                .onChange(of: login) { on in
-                                    do { if on { try SMAppService.mainApp.register() } else { try SMAppService.mainApp.unregister() } }
-                                    catch { login = SMAppService.mainApp.status == .enabled }
-                                }
+                            Divider().overlay(W.line)
+                            SettingRow("Open at login", "Keeps the menu-bar disk monitor running.") {
+                                Toggle("", isOn: $login).labelsHidden()
+                                    .onChange(of: login) { on in
+                                        do { if on { try SMAppService.mainApp.register() } else { try SMAppService.mainApp.unregister() } }
+                                        catch { login = SMAppService.mainApp.status == .enabled }
+                                    }
+                            }
                         }
                         .toggleStyle(.switch).tint(W.orange)
+                    }
+                    Card {
+                        VStack(alignment: .leading, spacing: 14) {
+                            SettingRow("Auto-clean safe caches", "Only caches marked Safe that rebuild themselves. Never projects, Docker, databases or AI history. Skips apps that are running.") {
+                                Picker("", selection: $auto) { ForEach(AutoSchedule.allCases, id: \.rawValue) { Text($0.rawValue).tag($0.rawValue) } }
+                                    .pickerStyle(.segmented).labelsHidden().frame(width: 210)
+                            }
+                            HStack {
+                                Text(autoResult ?? (AutoClean.last.map { "Last auto-clean: \(RelativeDateTimeFormatter().localizedString(for: $0, relativeTo: Date()))" } ?? "Not run yet"))
+                                    .font(W.body(11)).foregroundColor(W.faint)
+                                Spacer()
+                                SecondaryButton(title: store.autoCleaning ? "Cleaning…" : "Run now", icon: "sparkles") {
+                                    store.runAutoClean(reason: "manual") { autoResult = "Freed \(human($0)) just now." }
+                                }
+                            }
+                            Text("Includes: " + AutoClean.rules.map(\.name).joined(separator: " · "))
+                                .font(W.body(10)).foregroundColor(W.faint).fixedSize(horizontal: false, vertical: true)
+                        }
                     }
                     Card {
                         VStack(alignment: .leading, spacing: 8) {
@@ -192,6 +218,15 @@ struct SettingsView: View {
                 .padding(.horizontal, 28).padding(.bottom, 24)
             }
         }
+    }
+}
+
+struct SettingRow<Control: View>: View {
+    let title: String, sub: String
+    @ViewBuilder let control: Control
+    init(_ t: String, _ s: String, @ViewBuilder control: () -> Control) { title = t; sub = s; self.control = control() }
+    var body: some View {
+        HStack(spacing: 16) { SettingLabel(title, sub); Spacer(); control }
     }
 }
 

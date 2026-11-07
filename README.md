@@ -19,6 +19,11 @@ Most Mac cleaners were built for browser caches and "junk files". On a developer
 - **Tool-native cleanups.** Docker build cache, `pnpm store prune`, `brew cleanup`, MySQL `PURGE BINARY LOGS`, dead Xcode simulators. Each runs through the tool's own command and never wipes Docker volumes.
 - **Protected list.** Docker data, databases, Android emulators, `.git`, credentials and AI-tool logins are hard-blocked.
 - **Delete or Trash.** You choose. The real space freed is measured from the disk.
+- **Space Map.** A treemap of your home folder. Click any block to look inside and see exactly where the space went. View only.
+- **Projects.** Every project with its size, rebuildable build files, last edit and git status. Clean build files in one click, or zip an old project to `~/Wasevo Archives` (the zip is verified before the original goes to the Trash).
+- **App Uninstaller.** Removes an app plus the caches, settings and containers it leaves in your Library. Always to the Trash, never while the app is running, never Apple apps.
+- **AI-tool cleanup.** Caches of Claude, Cursor and Windsurf, Gemini CLI temp files, and (opt-in) old Claude Code / Codex sessions and unused Hugging Face models. Logins and claude-mem data are never touched.
+- **Auto-clean.** Daily or weekly cleaning of caches marked Safe only, with a notification. Projects, Docker, databases and AI history are never auto-cleaned.
 - **Large files (view only).** Your biggest files, with 🔒 warnings on ones you must keep.
 - **History log.** Every deletion is written to `~/Library/Logs/WasevoCleaner.log`.
 - **Menu-bar monitor.** Free space is always visible, with a warning when it gets low.
@@ -30,6 +35,7 @@ Most Mac cleaners were built for browser caches and "junk files". On a developer
 | System & app caches | `~/Library/Caches` (Apple caches skipped), Chrome on-device AI model, Google Updater downloads, VS Code installer cache, Chrome/Brave leftover update copies |
 | Developer caches | npm, uv, Bun, Composer, Yarn, Cargo registry, shared Rust targets, Playwright/Puppeteer, Gradle, Xcode DerivedData, Arduino archives |
 | Project build files | `node_modules`, `target`, `.next`, `.nuxt`, `.turbo`, `.svelte-kit` |
+| AI tools | Claude / Cursor / Windsurf caches, Gemini temp, old Claude Code & Codex sessions (opt-in), Hugging Face models unused 90+ days (opt-in) |
 | Downloads & logs | Crash reports older than 7 days, old `.dmg`/`.pkg` installers (opt-in) |
 | Tool cleanups | Docker build cache, pnpm, Homebrew, MySQL binlogs (opt-in), Xcode simulators (opt-in) |
 
@@ -56,18 +62,16 @@ New cache locations are one entry in `CACHE_RULES`. PRs are welcome, especially 
 
 ```
 Sources/WasevoCleaner/
-  Engine/   Rules.swift (registry + protections) · Scanner.swift · Cleaner.swift
+  Engine/   Rules.swift (registry + protections) · Scanner · Cleaner · SpaceMap · Projects · Uninstaller · AutoClean
   App/      WasevoCleanerApp.swift · Store.swift · Theme.swift
-  Views/    RootView · ScanView · OtherViews
+  Views/    RootView · ScanView · SpaceMapView · ProjectsView · UninstallerView · OtherViews
 ```
 
 ## Roadmap
 
-- App uninstaller with leftover finder
 - Duplicate-file finder
-- Disk treemap
-- AI-tool sessions (Claude, Codex, Gemini) with auth-file protection
-- Scheduled auto-clean of safe caches
+- Startup items and background agents
+- Memory/CPU and battery/charger health
 - Signed and notarized releases, Homebrew cask
 
 ## License

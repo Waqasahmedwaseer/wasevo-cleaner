@@ -36,6 +36,7 @@ enum Category: String, CaseIterable, Identifiable {
     case developer = "Developer caches"
     case projects = "Project build files"
     case downloads = "Downloads & logs"
+    case ai = "AI tools"
     case tools = "Tool cleanups"
 
     var id: String { rawValue }
@@ -45,6 +46,7 @@ enum Category: String, CaseIterable, Identifiable {
         case .developer: return "hammer"
         case .projects: return "folder.badge.gearshape"
         case .downloads: return "arrow.down.circle"
+        case .ai: return "brain"
         case .tools: return "wrench.and.screwdriver"
         }
     }
@@ -54,6 +56,7 @@ enum Category: String, CaseIterable, Identifiable {
         case .developer: return "Package-manager and compiler caches. Downloaded or rebuilt when needed."
         case .projects: return "node_modules, Rust target, .next inside your projects. Your code is never touched."
         case .downloads: return "Old installers and crash reports."
+        case .ai: return "Caches and old sessions of Claude, Codex, Cursor and friends. Logins are never touched."
         case .tools: return "Cleanups run through each tool's own safe command."
         }
     }
@@ -89,11 +92,17 @@ struct CacheRule {
     let note: String
     var contentsOnly = false            // keep the folder itself, clear what is inside
     var skipPrefixes: [String] = []     // children to leave alone (contentsOnly mode)
+    var skipContaining: [String] = []   // children whose name contains any of these are left alone
+    var depth = 1                       // contentsOnly: how many folder levels down the items are
     var onlyExtensions: [String] = []   // contentsOnly: only these file types
     var olderThanDays: Double = 0       // contentsOnly: only items older than this
     var blockIfRunning: [String] = []   // skip while any of these processes run
     var selectedByDefault = true
+    var autoClean: Bool { risk == .safe && selectedByDefault && category != .projects && category != .tools }
 }
+
+let ELECTRON_CACHE_DIRS = ["Cache", "Code Cache", "GPUCache", "DawnGraphiteCache", "DawnWebGPUCache", "CachedData"]
+func electronCaches(_ app: String) -> [String] { ELECTRON_CACHE_DIRS.map { "~/Library/Application Support/\(app)/\($0)" } }
 
 let CACHE_RULES: [CacheRule] = [
     // System & app caches
@@ -139,6 +148,31 @@ let CACHE_RULES: [CacheRule] = [
               note: "Xcode rebuilds it.", blockIfRunning: ["Xcode", "xcodebuild"]),
     CacheRule(category: .developer, risk: .redownload, name: "Arduino download archives", paths: ["~/Library/Arduino15/staging"],
               note: "Archives of already-installed boards/tools.", contentsOnly: true, blockIfRunning: ["Arduino IDE"]),
+
+    CacheRule(category: .system, risk: .safe, name: "VS Code caches", paths: electronCaches("Code"),
+              note: "Browser-style caches inside VS Code. Settings, extensions and history stay.",
+              blockIfRunning: ["Code", "Code Helper"]),
+
+    // AI tools
+    CacheRule(category: .ai, risk: .safe, name: "Claude desktop caches", paths: electronCaches("Claude"),
+              note: "Web caches of the Claude app. Chats live on Anthropic's servers; logins stay.",
+              blockIfRunning: ["Claude"]),
+    CacheRule(category: .ai, risk: .safe, name: "Cursor caches", paths: electronCaches("Cursor"),
+              note: "Web caches of Cursor. Settings, extensions and chats stay.", blockIfRunning: ["Cursor"]),
+    CacheRule(category: .ai, risk: .safe, name: "Windsurf caches", paths: electronCaches("Windsurf"),
+              note: "Web caches of Windsurf. Settings and chats stay.", blockIfRunning: ["Windsurf"]),
+    CacheRule(category: .ai, risk: .safe, name: "Gemini CLI temp files", paths: ["~/.gemini/tmp"],
+              note: "Temporary files. Your Gemini login stays.", contentsOnly: true, blockIfRunning: ["gemini"]),
+    CacheRule(category: .ai, risk: .review, name: "Claude Code history of projects idle 30+ days",
+              paths: ["~/.claude/projects"],
+              note: "Old session transcripts (used by --resume). Your code, settings and login stay.",
+              contentsOnly: true, skipContaining: ["claude-mem"], olderThanDays: 30, selectedByDefault: false),
+    CacheRule(category: .ai, risk: .review, name: "Codex sessions older than 30 days", paths: ["~/.codex/sessions"],
+              note: "Old Codex CLI session logs. Your login (auth.json) and config stay.",
+              contentsOnly: true, depth: 3, olderThanDays: 30, selectedByDefault: false),
+    CacheRule(category: .ai, risk: .redownload, name: "Hugging Face models unused 90+ days", paths: ["~/.cache/huggingface/hub"],
+              note: "Downloaded model weights. Downloaded again if a script asks for them.",
+              contentsOnly: true, skipPrefixes: ["."], olderThanDays: 90, selectedByDefault: false),
 
     // Downloads & logs
     CacheRule(category: .downloads, risk: .safe, name: "Crash reports older than 7 days", paths: ["~/Library/Logs/DiagnosticReports"],

@@ -20,6 +20,7 @@ struct CleanItem: Identifiable {
     let blocked: String?     // why it is skipped right now
     var selected: Bool
     var revealPath: String?
+    var isTool: Bool { if case .tool = kind { return true }; return false }
 }
 
 struct CleanReport {
@@ -46,15 +47,38 @@ final class Store: ObservableObject {
     @Published var loadingBigFiles = false
     @Published var lastScan: Date?
 
+    @Published var autoCleaning = false
     private var timer: Timer?
+    private var autoTimer: Timer?
+    private var lastLowWarning: Date?
 
     init() {
         timer = Timer.scheduledTimer(withTimeInterval: 30, repeats: true) { [weak self] _ in self?.refreshDisk() }
+        autoTimer = Timer.scheduledTimer(withTimeInterval: 3600, repeats: true) { [weak self] _ in self?.autoCleanIfDue() }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 60) { [weak self] in self?.autoCleanIfDue() }
     }
 
     func refreshDisk() {
         free = volumeFree()
         total = volumeTotal()
+        if isLow, lastLowWarning.map({ Date().timeIntervalSince($0) > 86400 }) ?? true {
+            lastLowWarning = Date()
+            notify("Disk space is low", "Only \(human(free)) free. Open Wasevo Cleaner and run a Smart Scan.")
+        }
+    }
+
+    func autoCleanIfDue() {
+        guard AutoClean.isDue else { return }
+        runAutoClean(reason: "scheduled")
+    }
+
+    func runAutoClean(reason: String, done: ((Int64) -> Void)? = nil) {
+        guard !autoCleaning, phase != .cleaning else { return }
+        autoCleaning = true
+        DispatchQueue.global(qos: .utility).async {
+            let freed = AutoClean.run(reason: reason)
+            DispatchQueue.main.async { self.autoCleaning = false; self.refreshDisk(); done?(freed) }
+        }
     }
 
     var usedFraction: Double { total > 0 ? Double(total - free) / Double(total) : 0 }
