@@ -166,7 +166,9 @@ struct SettingsView: View {
     @AppStorage("autoClean") private var auto = AutoSchedule.off.rawValue
     @EnvironmentObject var store: Store
     @State private var autoResult: String?
-    @AppStorage("appearance") private var appearance = AppAppearance.system.rawValue
+    @AppStorage("appearance") private var appearance = AppAppearance.light.rawValue
+    @AppStorage("weeklyReport") private var weeklyReport = true
+    @State private var transferMessage: String?
 
     var body: some View {
         VStack(spacing: 0) {
@@ -191,6 +193,23 @@ struct SettingsView: View {
                                         .buttonStyle(.plain)
                                     }
                                 }
+                            }
+                            Divider().overlay(W.line)
+                            SettingRow("Weekly report", "A notification once a week with how much can be cleaned. Measures only, never cleans.") {
+                                Toggle("", isOn: $weeklyReport).labelsHidden().toggleStyle(.switch).tint(W.orange)
+                            }
+                            Divider().overlay(W.line)
+                            SettingRow("Move your settings", transferMessage ?? "Save these settings to a file, or load them on another Mac.") {
+                                HStack(spacing: 8) {
+                                    SecondaryButton(title: "Export", icon: "square.and.arrow.up") { SettingsTransfer.export() }
+                                    SecondaryButton(title: "Import", icon: "square.and.arrow.down") {
+                                        transferMessage = SettingsTransfer.importFile()
+                                    }
+                                }
+                            }
+                            Divider().overlay(W.line)
+                            SettingRow("Show the welcome tour again", "The three intro screens from the first launch.") {
+                                SecondaryButton(title: "Show", icon: "sparkles") { Nav.shared.showTour = true }
                             }
                             Divider().overlay(W.line)
                             SettingRow("Stop permission pop-ups", "Give Wasevo Cleaner Full Disk Access once in System Settings (Privacy & Security > Full Disk Access). macOS then stops asking about folders and other apps' data.") {
@@ -250,7 +269,7 @@ struct SettingsView: View {
                                 .background(RoundedRectangle(cornerRadius: 8).fill(W.bg))
                         }
                     }
-                    Text("Wasevo Cleaner · open source (MIT) · made by Wasevo").font(W.body(11)).foregroundColor(W.faint)
+                    AboutCard()
                 }
                 .padding(.horizontal, 28).padding(.bottom, 24)
             }
@@ -274,6 +293,33 @@ struct SettingLabel: View {
         VStack(alignment: .leading, spacing: 2) {
             Text(title).font(W.body(13, .semibold)).foregroundColor(W.text)
             Text(sub).font(W.body(11)).foregroundColor(W.faint)
+        }
+    }
+}
+
+// MARK: - About
+
+let WASEVO_URL = URL(string: "https://wasevo.com")!
+var appVersion: String { Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "dev" }
+
+struct AboutCard: View {
+    var body: some View {
+        Card {
+            HStack(spacing: 16) {
+                Logo(size: 46)
+                VStack(alignment: .leading, spacing: 4) {
+                    HStack(spacing: 8) {
+                        Text("Wasevo Cleaner").font(W.display(17)).foregroundColor(W.text)
+                        Pill("v\(appVersion)", W.faint)
+                    }
+                    Text("Designed and built by Waqas Ahmed Waseer, Founder & CEO of Wasevo.")
+                        .font(W.body(12.5)).foregroundColor(W.muted)
+                    Text("Open source under the MIT License. Made with care for people who build things.")
+                        .font(W.body(11.5)).foregroundColor(W.faint)
+                }
+                Spacer()
+                SecondaryButton(title: "wasevo.com", icon: "globe") { NSWorkspace.shared.open(WASEVO_URL) }
+            }
         }
     }
 }

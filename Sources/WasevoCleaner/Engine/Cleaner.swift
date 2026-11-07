@@ -74,7 +74,7 @@ func removePath(_ path: String, _ mode: DeleteMode) -> Bool {
     guard fm.fileExists(atPath: path) else { return true }
     do {
         if mode == .trash {
-            try fm.trashItem(at: URL(fileURLWithPath: path), resultingItemURL: nil)
+            try trashWithUndo(URL(fileURLWithPath: path))
         } else {
             try fm.removeItem(atPath: path)
         }

@@ -76,7 +76,6 @@ struct SidebarItem: View {
                     .fill(LinearGradient(colors: [Color.white.opacity(0.35), .clear], startPoint: .top, endPoint: .center)))
                 .overlay(Image(systemName: page.icon).font(.system(size: 11, weight: .semibold)).foregroundColor(.white))
                 .frame(width: 22, height: 22)
-                .shadow(color: page.tint.opacity(0.35), radius: 3, y: 1)
             Text(page.rawValue).font(W.body(13, selected ? .semibold : .regular))
             Spacer()
             if act.running[page] != nil {
@@ -90,7 +89,7 @@ struct SidebarItem: View {
         .animation(.spring(response: 0.3), value: act.running[page] != nil)
         .animation(.spring(response: 0.3), value: act.finished.contains(page))
         .foregroundColor(selected || hover ? W.text : W.muted)
-        .padding(.horizontal, 8).padding(.vertical, 4)
+        .padding(.horizontal, 8).padding(.vertical, 3)
         .background {
             if selected {
                 RoundedRectangle(cornerRadius: 9, style: .continuous)
@@ -115,6 +114,12 @@ struct RootView: View {
     @State private var forward: [Page] = []
     @Namespace private var ns
     @AppStorage("appearance") private var appearance = AppAppearance.light.rawValue
+    @AppStorage("onboarded") private var onboarded = false
+    @State private var showOnboarding = false
+    @ObservedObject private var nav = Nav.shared
+    @ObservedObject private var undo = UndoLog.shared
+    @State private var undoMessage: String?
+    @AppStorage("sidebarRail") private var rail = false
 
     func go(_ p: Page, record: Bool = true) {
         guard p != page else { return }
@@ -125,27 +130,94 @@ struct RootView: View {
     @ObservedObject private var act = Activity.shared
 
     var body: some View {
-        NavigationSplitView {
-            sidebar
-                .navigationSplitViewColumnWidth(min: 214, ideal: 224, max: 260)
-        } detail: {
-            detail
-                .id(page)
-                .transition(.asymmetric(insertion: .opacity.combined(with: .offset(y: 14)), removal: .opacity))
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .background(Backdrop())
-                .environment(\.pageTint, page.tint)
-                .environment(\.pageIcon, page.icon)
-                .navigationTitle(page.rawValue)
-                .toolbar { toolbar }
-                .modifier(SeeThroughToolbar())
+        HStack(spacing: 0) {
+            // our own sidebar: full list or slim icon rail, animated
+            Group {
+                if rail { railView.transition(.opacity) } else { sidebar.transition(.opacity) }
+            }
+            .frame(width: rail ? 76 : 228)
+            .frame(maxHeight: .infinity)
+            .background(SidebarBackground().ignoresSafeArea())
+            .overlay(Rectangle().fill(W.line).frame(width: 1).ignoresSafeArea(), alignment: .trailing)
+            .clipped()
+
+            VStack(spacing: 0) {
+                topBar
+                detail
+                    .id(page)
+                    .transition(.asymmetric(insertion: .opacity.combined(with: .offset(y: 14)), removal: .opacity))
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            }
+            .background(Backdrop())
+            .environment(\.pageTint, page.tint)
+            .environment(\.pageIcon, page.icon)
+            .overlay(alignment: .bottom) { undoBar }
         }
+        .ignoresSafeArea(.container, edges: .top)   // sidebar and page reach the window's top edge
         .frame(minWidth: 1040, minHeight: 680)
         .onChange(of: appearance) { v in AppAppearance(rawValue: v)?.apply() }
+        .onReceive(nav.$goTo) { p in if let p { go(p); nav.goTo = nil } }
+        .onChange(of: nav.refresh) { _ in rescanCurrent() }
+        .onChange(of: nav.showTour) { v in if v { showOnboarding = true; nav.showTour = false } }
+        .sheet(isPresented: $showOnboarding, onDismiss: { onboarded = true }) { Onboarding(isPresented: $showOnboarding) }
         .onAppear {
             AppAppearance.current.apply()
+            if !onboarded { DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { showOnboarding = true } }
             // `--scan` starts a Smart Scan on launch (handy for scripts and screenshots)
             if CommandLine.arguments.contains("--scan") && store.phase == .idle { store.scan() }
+        }
+    }
+
+    /// ⌘R: rescan whatever page is open.
+    func rescanCurrent() {
+        switch page {
+        case .scan: scanEverything(store)
+        case .map: SpaceMapModel.shared.open(SpaceMapModel.shared.path, force: true)
+        case .projects: ProjectsModel.shared.load()
+        case .duplicates: DupModel.shared.scan()
+        case .photos: PhotosModel.shared.scan()
+        case .downloads: DownloadsModel.shared.scan()
+        case .uninstaller: UninstallModel.shared.load()
+        case .privacy: PrivacyModel.shared.load()
+        case .startup: StartupModel.shared.load()
+        case .updates: UpdatesModel.shared.check()
+        case .large: store.loadBigFiles()
+        default: break
+        }
+    }
+
+    /// "Put back" bar after anything was moved to the Trash.
+    @ViewBuilder var undoBar: some View {
+        if let msg = undoMessage {
+            HStack(spacing: 10) {
+                Image(systemName: "checkmark.circle.fill").foregroundColor(W.green)
+                Text(msg).font(W.body(12.5, .medium)).foregroundColor(W.text)
+            }
+            .padding(.horizontal, 16).frame(height: 40)
+            .glassCard(radius: 20)
+            .padding(.bottom, 18)
+            .transition(.move(edge: .bottom).combined(with: .opacity))
+            .onAppear { DispatchQueue.main.asyncAfter(deadline: .now() + 3) { withAnimation { undoMessage = nil } } }
+        } else if undo.canUndo {
+            HStack(spacing: 12) {
+                Image(systemName: "trash").foregroundColor(W.faint)
+                Text("\(undo.batch.count) item\(undo.batch.count == 1 ? "" : "s") moved to the Trash")
+                    .font(W.body(12.5, .medium)).foregroundColor(W.text)
+                Button {
+                    undo.putBack { ok, skipped in
+                        withAnimation(.spring(response: 0.4)) {
+                            undoMessage = "Put back \(ok) item\(ok == 1 ? "" : "s")" + (skipped > 0 ? " · \(skipped) skipped" : "")
+                        }
+                    }
+                } label: {
+                    Label("Put back", systemImage: "arrow.uturn.backward").font(W.body(12.5, .semibold)).foregroundColor(W.orange300)
+                }
+                .buttonStyle(PressStyle())
+            }
+            .padding(.horizontal, 16).frame(height: 40)
+            .glassCard(radius: 20)
+            .padding(.bottom, 18)
+            .transition(.move(edge: .bottom).combined(with: .opacity))
         }
     }
 
@@ -170,43 +242,69 @@ struct RootView: View {
         }
     }
 
-    @ToolbarContentBuilder var toolbar: some ToolbarContent {
-        ToolbarItemGroup(placement: .navigation) {
-            Button {
+    /// Top bar of the main area: sidebar toggle, back / forward, page title, running tasks, appearance, settings.
+    var topBar: some View {
+        HStack(spacing: 6) {
+            barButton("sidebar.left", rail ? "Show full sidebar (⌃⌘S)" : "Collapse to icons (⌃⌘S)") {
+                withAnimation(.spring(response: 0.4, dampingFraction: 0.86)) { rail.toggle() }
+            }
+            .keyboardShortcut("s", modifiers: [.command, .control])
+            barButton("chevron.left", "Back (⌘[)", disabled: back.isEmpty) {
                 guard let p = back.popLast() else { return }
                 forward.append(page); go(p, record: false)
-            } label: { Image(systemName: "chevron.left") }
-            .disabled(back.isEmpty).help("Back").keyboardShortcut("[", modifiers: .command)
-            Button {
+            }
+            .keyboardShortcut("[", modifiers: .command)
+            barButton("chevron.right", "Forward (⌘])", disabled: forward.isEmpty) {
                 guard let p = forward.popLast() else { return }
                 back.append(page); go(p, record: false)
-            } label: { Image(systemName: "chevron.right") }
-            .disabled(forward.isEmpty).help("Forward").keyboardShortcut("]", modifiers: .command)
-        }
-        ToolbarItem(placement: .primaryAction) {
+            }
+            .keyboardShortcut("]", modifiers: .command)
+            Text(page.rawValue).font(W.body(14, .semibold)).foregroundColor(W.text).padding(.leading, 6)
+                .id(page).transition(.opacity)
+            Spacer()
             if let (p, what) = act.running.first {
                 Button { go(p) } label: {
                     HStack(spacing: 6) {
                         ProgressView().controlSize(.mini)
                         Text(act.running.count > 1 ? "\(act.running.count) tasks running" : "\(what)…").font(W.body(11.5, .medium))
+                            .foregroundColor(W.muted)
                     }
+                    .padding(.horizontal, 10).frame(height: 28)
+                    .liquidCapsule(hover: false)
                 }
-                .help("Running in the background. Click to open.")
+                .buttonStyle(PressStyle()).help("Running in the background. Click to open.")
+                .transition(.scale.combined(with: .opacity))
             }
-        }
-        ToolbarItem(placement: .primaryAction) {
-            Picker("Appearance", selection: $appearance) {
+            // appearance: System / Light / Dark
+            HStack(spacing: 2) {
                 ForEach(AppAppearance.allCases, id: \.self) { a in
-                    Label(a.rawValue, systemImage: a.icon).tag(a.rawValue)
+                    let on = appearance == a.rawValue
+                    Button { withAnimation(.easeInOut(duration: 0.25)) { appearance = a.rawValue } } label: {
+                        Image(systemName: a.icon).font(.system(size: 12, weight: .semibold))
+                            .foregroundColor(on ? W.text : W.faint)
+                            .frame(width: 30, height: 24)
+                            .background(RoundedRectangle(cornerRadius: 7).fill(on ? W.panel : Color.clear)
+                                .shadow(color: .black.opacity(on ? 0.08 : 0), radius: 2, y: 1))
+                    }
+                    .buttonStyle(PressStyle()).help(a.rawValue)
                 }
             }
-            .pickerStyle(.segmented)
-            .labelStyle(.iconOnly)
-            .help("Appearance: Light, Dark or follow your Mac")
+            .padding(3)
+            .background(RoundedRectangle(cornerRadius: 9).fill(W.line))
+            barButton("gearshape", "Settings (⌘,)") { go(.settings) }
         }
-        ToolbarItem(placement: .primaryAction) {
-            Button { go(.settings) } label: { Image(systemName: "gearshape") }.help("Settings")
+        .padding(.horizontal, 16).padding(.top, 6).frame(height: 58)   // in line with the window buttons
+        .animation(.spring(response: 0.3), value: act.running.count)
+    }
+
+    func barButton(_ icon: String, _ help: String, disabled: Bool = false, _ action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: icon).font(.system(size: 13, weight: .semibold))
+                .foregroundColor(disabled ? W.faint.opacity(0.45) : W.muted)
+                .frame(width: 30, height: 28)
+                .contentShape(Rectangle())
         }
+        .buttonStyle(PressStyle()).disabled(disabled).help(help)
     }
 
     var sidebar: some View {
@@ -219,13 +317,13 @@ struct RootView: View {
                 }
                 Spacer()
             }
-            .padding(.horizontal, 10).padding(.bottom, 10)
+            .padding(.horizontal, 10).padding(.top, 44).padding(.bottom, 8)
 
             ScrollView(showsIndicators: false) {
                 VStack(alignment: .leading, spacing: 1) {
                     ForEach(["CLEAN", "OPTIMIZE", "INSPECT", "APP"], id: \.self) { sec in
                         Text(sec).font(.system(size: 10, weight: .semibold)).tracking(1.2).foregroundColor(W.faint)
-                            .padding(.horizontal, 10).padding(.top, sec == "CLEAN" ? 0 : 10).padding(.bottom, 3)
+                            .padding(.horizontal, 10).padding(.top, sec == "CLEAN" ? 0 : 8).padding(.bottom, 2)
                         ForEach(Page.allCases.filter { $0.section == sec }) { p in
                             SidebarItem(page: p, selected: page == p, ns: ns) { go(p) }
                         }
@@ -234,12 +332,71 @@ struct RootView: View {
             }
             Spacer(minLength: 8)
             diskMini
+            Button { NSWorkspace.shared.open(WASEVO_URL) } label: {
+                HStack(spacing: 4) {
+                    Text("by").foregroundColor(W.faint)
+                    Text("Wasevo").foregroundColor(W.orange300).fontWeight(.semibold)
+                    Text("·  wasevo.com").foregroundColor(W.faint)
+                }
+                .font(W.body(10.5))
+                .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(PressStyle()).padding(.top, 4).help("Built by Waqas Ahmed Waseer, CEO of Wasevo")
         }
         .padding(.horizontal, 10).padding(.bottom, 14)
     }
 
+    /// Collapsed sidebar: logo, one glossy icon per page (with tooltips), disk usage ring.
+    var railView: some View {
+        VStack(spacing: 6) {
+            Logo(size: 30).padding(.top, 44).padding(.bottom, 8).help("Wasevo Cleaner")
+            ScrollView(showsIndicators: false) {
+                VStack(spacing: 4) {
+                    ForEach(["CLEAN", "OPTIMIZE", "INSPECT", "APP"], id: \.self) { sec in
+                        if sec != "CLEAN" { Divider().overlay(W.line).frame(width: 30).padding(.vertical, 4) }
+                        ForEach(Page.allCases.filter { $0.section == sec }) { p in railItem(p) }
+                    }
+                }
+                .padding(.vertical, 2)
+            }
+            Spacer(minLength: 6)
+            ZStack {
+                Circle().stroke(W.line, lineWidth: 4)
+                Circle().trim(from: 0, to: store.usedFraction)
+                    .stroke(store.isLow ? AnyShapeStyle(W.red) : AnyShapeStyle(W.accent), style: StrokeStyle(lineWidth: 4, lineCap: .round))
+                    .rotationEffect(.degrees(-90))
+                Text("\(Int(store.usedFraction * 100))").font(.system(size: 10, weight: .semibold)).foregroundColor(W.text)
+            }
+            .frame(width: 34, height: 34)
+            .help("\(human(store.free)) free of \(human(store.total))")
+        }
+        .padding(.bottom, 14)
+        .frame(maxWidth: .infinity)
+    }
+
+    func railItem(_ p: Page) -> some View {
+        let on = page == p
+        return Button { go(p) } label: {
+            GlossyIcon(icon: p.icon, tint: p.tint, size: 30, glow: false)
+                .frame(width: 46, height: 40)
+                .background {
+                    if on {
+                        RoundedRectangle(cornerRadius: 10, style: .continuous).fill(p.tint.opacity(0.16))
+                            .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).stroke(p.tint.opacity(0.3), lineWidth: 1))
+                            .matchedGeometryEffect(id: "rail-selection", in: ns)
+                    }
+                }
+                .overlay(alignment: .topTrailing) {
+                    if act.running[p] != nil { ProgressView().controlSize(.mini).offset(x: -2, y: 2) }
+                    else if act.finished.contains(p) { Circle().fill(p.tint).frame(width: 7, height: 7).offset(x: -5, y: 5) }
+                }
+        }
+        .buttonStyle(PressStyle())
+        .help(p.rawValue)
+    }
+
     var diskMini: some View {
-        VStack(alignment: .leading, spacing: 6) {
+        VStack(alignment: .leading, spacing: 5) {
             HStack {
                 Image(systemName: "internaldrive").foregroundColor(W.faint)
                 Text("Macintosh HD").font(W.body(11, .semibold)).foregroundColor(W.muted)
@@ -252,17 +409,19 @@ struct RootView: View {
                     Capsule().fill(store.isLow ? AnyShapeStyle(W.red) : AnyShapeStyle(W.accent)).frame(width: g.size.width * store.usedFraction)
                 }
             }
-            .frame(height: 6)
+            .frame(height: 5)
             Text("\(human(store.free)) free of \(human(store.total))").font(W.body(11)).foregroundColor(store.isLow ? W.red : W.faint)
         }
-        .padding(12)
+        .padding(10)
         .glassCard(radius: 12)
     }
 }
 
-/// Lets the coloured backdrop flow under the toolbar (macOS 15+); macOS 26 draws Liquid Glass there.
-struct SeeThroughToolbar: ViewModifier {
-    func body(content: Content) -> some View {
-        if #available(macOS 15.0, *) { content.toolbarBackground(.hidden, for: .windowToolbar) } else { content }
+
+
+/// Soft solid sidebar (no see-through blur): warm off-white in light mode, deep ink in dark mode.
+struct SidebarBackground: View {
+    var body: some View {
+        LinearGradient(colors: [Color.dyn(0xF8F6F3, 0x16151B), Color.dyn(0xF2EFEB, 0x121117)], startPoint: .top, endPoint: .bottom)
     }
 }

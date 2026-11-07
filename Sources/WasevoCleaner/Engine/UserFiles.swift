@@ -73,7 +73,7 @@ func trashUserFile(_ path: String) -> Bool {
         log("REFUSED (review file) \(p)"); return false
     }
     do {
-        try fm.trashItem(at: URL(fileURLWithPath: p), resultingItemURL: nil)
+        try trashWithUndo(URL(fileURLWithPath: p))
         log("TRASHED (review) \(p)")
         return true
     } catch {

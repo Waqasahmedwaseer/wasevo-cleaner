@@ -105,7 +105,7 @@ func clearPrivacy(_ items: [PrivacyItem], browser b: BrowserSpec) -> (done: Int,
                 && (item.kind == .cache || (name.map { allowed.contains($0) } ?? false))
             guard ok else { log("REFUSED (browser) \(p)"); continue }
             do {
-                try FileManager.default.trashItem(at: URL(fileURLWithPath: p), resultingItemURL: nil)
+                try trashWithUndo(URL(fileURLWithPath: p))
                 log("TRASHED (\(b.name) \(item.kind.rawValue)) \(p)")
                 done += 1
             } catch { log("FAILED \(p): \(error.localizedDescription)") }

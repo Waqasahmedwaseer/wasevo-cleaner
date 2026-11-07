@@ -87,7 +87,7 @@ func archiveProject(_ p: Project) -> (zip: String?, error: String?) {
         return (nil, "The zip failed its check, so the project was left in place.")
     }
     do {
-        try FileManager.default.trashItem(at: URL(fileURLWithPath: p.path), resultingItemURL: nil)
+        try trashWithUndo(URL(fileURLWithPath: p.path))
         log("ARCHIVED \(p.path) → \(zip) (original moved to Trash)")
         return (zip, nil)
     } catch {

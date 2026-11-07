@@ -320,6 +320,7 @@ struct GlossyIcon: View {
     let icon: String
     var tint: Color = W.orange
     var size: CGFloat = 44
+    var glow = true
     var body: some View {
         let shape = RoundedRectangle(cornerRadius: size * 0.27, style: .continuous)
         ZStack {
@@ -332,7 +333,7 @@ struct GlossyIcon: View {
                 .shadow(color: Color.black.opacity(0.18), radius: size * 0.03, y: size * 0.02)
         }
         .frame(width: size, height: size)
-        .shadow(color: tint.opacity(0.40), radius: size * 0.22, y: size * 0.10)
+        .shadow(color: tint.opacity(glow ? 0.40 : 0), radius: size * 0.22, y: size * 0.10)
     }
 }
 

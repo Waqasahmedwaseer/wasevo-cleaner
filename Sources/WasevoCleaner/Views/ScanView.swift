@@ -27,14 +27,14 @@ struct IdleView: View {
                 Text("\(human(store.free)) free").font(W.display(30)).foregroundColor(store.isLow ? W.red : W.text)
                 Text("of \(human(store.total)) on Macintosh HD").font(W.body(13)).foregroundColor(W.faint)
             }
-            PrimaryButton(title: "Start Smart Scan", icon: "sparkles") { store.scan() }
-            HStack(alignment: .top, spacing: 14) {
-                Feature(icon: "lock.shield", title: "Never touches your code", text: "Source, .git, databases and Docker data are protected.")
-                Feature(icon: "bolt.horizontal", title: "Knows what's in use", text: "Skips running apps, dev servers and builds.")
-                Feature(icon: "ruler", title: "Real sizes", text: "Measures what files truly use on disk.")
+            VStack(spacing: 8) {
+                PrimaryButton(title: "Start Smart Scan", icon: "sparkles") { scanEverything(store) }
+                Text("Checks junk, duplicates, app updates and startup items in one go. Nothing is removed until you review it.")
+                    .font(W.body(11.5)).foregroundColor(W.faint)
             }
-            .frame(maxWidth: 860)
-            .padding(.horizontal, 40)
+            HealthGrid()
+                .frame(maxWidth: 900)
+                .padding(.horizontal, 36)
             Spacer()
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)

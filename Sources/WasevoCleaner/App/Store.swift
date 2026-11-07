@@ -54,8 +54,10 @@ final class Store: ObservableObject {
 
     init() {
         timer = Timer.scheduledTimer(withTimeInterval: 30, repeats: true) { [weak self] _ in self?.refreshDisk() }
-        autoTimer = Timer.scheduledTimer(withTimeInterval: 3600, repeats: true) { [weak self] _ in self?.autoCleanIfDue() }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 60) { [weak self] in self?.autoCleanIfDue() }
+        autoTimer = Timer.scheduledTimer(withTimeInterval: 3600, repeats: true) { [weak self] _ in
+            self?.autoCleanIfDue(); WeeklyReport.checkDue()
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 60) { [weak self] in self?.autoCleanIfDue(); WeeklyReport.checkDue() }
     }
 
     func refreshDisk() {

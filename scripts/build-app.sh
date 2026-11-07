@@ -4,7 +4,7 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-VERSION="0.3.0"
+VERSION="0.4.0"
 APP="dist/Wasevo Cleaner.app"
 
 swift build -c release
@@ -34,7 +34,7 @@ cat > "$APP/Contents/Info.plist" <<PLIST
   <key>CFBundleVersion</key><string>${VERSION}</string>
   <key>LSMinimumSystemVersion</key><string>13.0</string>
   <key>LSApplicationCategoryType</key><string>public.app-category.utilities</string>
-  <key>NSHumanReadableCopyright</key><string>© Wasevo · MIT License</string>
+  <key>NSHumanReadableCopyright</key><string>© Wasevo · Built by Waqas Ahmed Waseer, CEO of Wasevo · MIT License</string>
   <key>NSHighResolutionCapable</key><true/>
 </dict></plist>
 PLIST

@@ -91,7 +91,7 @@ func trashApp(_ app: InstalledApp) -> String? {
         return "Only apps in Applications can be removed."
     }
     do {
-        try FileManager.default.trashItem(at: URL(fileURLWithPath: p), resultingItemURL: nil)
+        try trashWithUndo(URL(fileURLWithPath: p))
         log("UNINSTALL TRASHED \(p)")
         return nil
     } catch {

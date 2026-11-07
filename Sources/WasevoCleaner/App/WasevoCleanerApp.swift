@@ -21,7 +21,30 @@ struct WasevoCleanerApp: App {
         WindowGroup("Wasevo Cleaner", id: "main") {
             RootView().environmentObject(store)
         }
-        .windowToolbarStyle(.unified)
+        .windowStyle(.hiddenTitleBar)
+        .commands {
+            CommandGroup(replacing: .appInfo) {
+                Button("About Wasevo Cleaner") {
+                    let credits = NSMutableAttributedString(
+                        string: "Designed and built by Waqas Ahmed Waseer\nFounder & CEO of Wasevo\n\nwasevo.com",
+                        attributes: [.font: NSFont.systemFont(ofSize: 11), .foregroundColor: NSColor.secondaryLabelColor])
+                    let r = (credits.string as NSString).range(of: "wasevo.com")
+                    credits.addAttribute(.link, value: "https://wasevo.com", range: r)
+                    NSApp.orderFrontStandardAboutPanel(options: [.credits: credits])
+                    NSApp.activate(ignoringOtherApps: true)
+                }
+            }
+            CommandMenu("Go") {
+                // ⌘1 … ⌘9 jump to the first nine pages
+                ForEach(Array(Page.allCases.prefix(9).enumerated()), id: \.element) { i, p in
+                    Button(p.rawValue) { Nav.shared.open(p) }
+                        .keyboardShortcut(KeyEquivalent(Character("\(i + 1)")), modifiers: .command)
+                }
+                Divider()
+                Button("Rescan This Page") { Nav.shared.rescan() }.keyboardShortcut("r", modifiers: .command)
+                Button("Settings") { Nav.shared.open(.settings) }.keyboardShortcut(",", modifiers: .command)
+            }
+        }
         .defaultSize(width: 1120, height: 780)
 
         MenuBarExtra {
