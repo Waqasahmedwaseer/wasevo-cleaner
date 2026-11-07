@@ -3,6 +3,7 @@ import SwiftUI
 // Projects: every project with its size, build files and last edit. Clean build files or archive old ones.
 
 final class ProjectsModel: ObservableObject {
+    static let shared = ProjectsModel()
     @Published var projects: [Project] = []
     @Published var loading = false
     @Published var progress = ""
@@ -12,10 +13,14 @@ final class ProjectsModel: ObservableObject {
     func load() {
         guard !loading else { return }
         loading = true
+        Activity.shared.start(.projects, "Measuring projects")
         progress = "Finding projects…"
         DispatchQueue.global(qos: .userInitiated).async {
             let list = scanAllProjects { d, t in DispatchQueue.main.async { self.progress = "Measuring \(d) of \(t) projects…" } }
-            DispatchQueue.main.async { self.projects = list; self.loading = false }
+            DispatchQueue.main.async {
+                self.projects = list; self.loading = false
+                Activity.shared.finish(.projects, "\(list.count) projects measured.")
+            }
         }
     }
 
@@ -64,7 +69,7 @@ final class ProjectsModel: ObservableObject {
 enum ProjectSort: String, CaseIterable { case size = "Biggest", age = "Oldest", build = "Most build files" }
 
 struct ProjectsView: View {
-    @StateObject private var model = ProjectsModel()
+    @ObservedObject private var model = ProjectsModel.shared
     @State private var sort: ProjectSort = .size
     @State private var onlyOld = false
     @State private var toArchive: Project?
@@ -105,7 +110,7 @@ struct ProjectsView: View {
                     Spacer()
                     Button { model.message = nil } label: { Image(systemName: "xmark") }.buttonStyle(.plain).foregroundColor(W.faint)
                 }
-                .padding(14).background(W.panel)
+                .padding(14).background(.regularMaterial)
             }
         }
         .onAppear { if model.projects.isEmpty { model.load() } }
@@ -139,8 +144,11 @@ struct ProjectsView: View {
             if !model.loading && !model.projects.isEmpty {
             let total = model.projects.reduce(Int64(0)) { $0 + $1.size }
             let build = model.projects.reduce(Int64(0)) { $0 + $1.buildSize }
-            Text("\(model.projects.count) projects · \(human(total)) · \(human(build)) build files")
-                .font(W.body(12, .semibold)).foregroundColor(W.faint)
+            HStack(spacing: 8) {
+                stat("\(model.projects.count)", "projects")
+                stat(human(total), "total")
+                stat(human(build), "rebuildable", W.orange300)
+            }
             }
         }
         .padding(.horizontal, 28).padding(.bottom, 10)
@@ -148,16 +156,16 @@ struct ProjectsView: View {
 
     func row(_ p: Project) -> some View {
         HStack(spacing: 14) {
-            Image(systemName: p.isGit ? "arrow.triangle.branch" : "folder.fill").foregroundColor(W.orange300).frame(width: 20)
+            IconBadge(icon: p.isGit ? "arrow.triangle.branch" : "folder.fill", color: p.inUse ? W.amber : W.orange, size: 36)
             VStack(alignment: .leading, spacing: 3) {
                 HStack(spacing: 8) {
                     Text(p.name).font(W.body(13, .semibold)).foregroundColor(W.text).lineLimit(1)
-                    if p.inUse { tag("In use", W.amber) }
-                    if p.uncommitted { tag("Uncommitted changes", W.amber) }
-                    if p.stale { tag("Idle \(p.ageDays) days", W.faint) }
+                    if p.inUse { Pill("In use", W.amber) }
+                    if p.uncommitted { Pill("Uncommitted changes", W.amber) }
+                    if p.stale { Pill("Idle \(p.ageDays) days", W.faint) }
                 }
                 Text(p.label).font(W.mono).foregroundColor(W.faint).lineLimit(1).truncationMode(.middle)
-                Text("Last edit \(p.ageDays == 0 ? "today" : "\(p.ageDays) days ago")" + (p.buildSize > 0 ? " · \(human(p.buildSize)) rebuildable build files" : ""))
+                (Text("Last edit \(daysAgo(p.ageDays))") + Text(p.buildSize > 0 ? "  ·  \(human(p.buildSize)) rebuildable" : "").foregroundColor(W.orange300))
                     .font(W.body(11)).foregroundColor(W.muted)
             }
             Spacer()
@@ -177,16 +185,22 @@ struct ProjectsView: View {
         .padding(.horizontal, 12).padding(.vertical, 11)
     }
 
-    func tag(_ s: String, _ c: Color) -> some View {
-        Text(s).font(W.body(10, .semibold)).foregroundColor(c)
-            .padding(.horizontal, 7).padding(.vertical, 2).background(Capsule().fill(c.opacity(0.14)))
+    func stat(_ value: String, _ label: String, _ c: Color = W.text) -> some View {
+        HStack(spacing: 5) {
+            Text(value).font(W.body(12, .bold)).foregroundColor(c)
+            Text(label).font(W.body(11)).foregroundColor(W.faint)
+        }
+        .padding(.horizontal, 10).padding(.vertical, 5)
+        .background(Capsule().fill(W.panel))
+        .overlay(Capsule().stroke(W.line, lineWidth: 1))
     }
 
     func smallButton(_ t: String, disabled: Bool, _ action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Text(t).font(W.body(11, .semibold)).foregroundColor(disabled ? W.faint.opacity(0.5) : W.text)
                 .padding(.horizontal, 10).padding(.vertical, 5)
-                .background(Capsule().stroke(W.line.opacity(3), lineWidth: 1))
+                .background(Capsule().fill(disabled ? Color.clear : W.panel2.opacity(0.6)))
+                .overlay(Capsule().stroke(disabled ? W.line : W.line.opacity(3), lineWidth: 1))
         }
         .buttonStyle(.plain).disabled(disabled)
     }

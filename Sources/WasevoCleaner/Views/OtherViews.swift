@@ -5,13 +5,18 @@ import ServiceManagement
 
 struct PageHeader: View {
     let title: String, subtitle: String
+    @Environment(\.pageTint) private var tint
+    @Environment(\.pageIcon) private var icon
     var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text(title).font(W.display(26)).foregroundColor(W.text)
-            Text(subtitle).font(W.body(13)).foregroundColor(W.faint)
+        HStack(spacing: 16) {
+            GlossyIcon(icon: icon, tint: tint, size: 50)
+            VStack(alignment: .leading, spacing: 3) {
+                Text(title).font(W.display(26)).tracking(-0.5).foregroundColor(W.text)
+                Text(subtitle).font(W.body(13)).foregroundColor(W.faint).lineSpacing(2)
+            }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.horizontal, 28).padding(.top, 24).padding(.bottom, 14)
+        .padding(.horizontal, 28).padding(.top, 18).padding(.bottom, 14)
     }
 }
 
@@ -48,8 +53,8 @@ struct BigFileRow: View {
 
     var body: some View {
         HStack(spacing: 14) {
-            Image(systemName: file.protected != nil ? "lock.fill" : "doc.fill")
-                .foregroundColor(file.protected != nil ? W.red : W.muted).frame(width: 20)
+            IconBadge(icon: file.protected != nil ? "lock.fill" : "doc.fill",
+                      color: file.protected != nil ? W.red : W.faint, size: 34)
             VStack(alignment: .leading, spacing: 3) {
                 Text((file.path as NSString).lastPathComponent).font(W.body(13, .semibold)).foregroundColor(W.text).lineLimit(1)
                 Text(file.path.replacingOccurrences(of: home, with: "~")).font(W.mono).foregroundColor(W.faint)
@@ -93,7 +98,7 @@ struct ProtectedView: View {
                     ForEach(rows, id: \.1) { r in
                         Card {
                             HStack(alignment: .top, spacing: 14) {
-                                Image(systemName: r.0).font(.system(size: 20)).foregroundColor(W.orange).frame(width: 28)
+                                IconBadge(icon: r.0, size: 40)
                                 VStack(alignment: .leading, spacing: 4) {
                                     Text(r.1).font(W.body(14, .semibold)).foregroundColor(W.text)
                                     Text(r.2).font(W.body(12)).foregroundColor(W.faint).fixedSize(horizontal: false, vertical: true)
@@ -123,9 +128,12 @@ struct HistoryView: View {
                 }
                 .padding(.trailing, 28).padding(.bottom, 14)
             }
+            if lines.isEmpty {
+                EmptyState(icon: "clock.arrow.circlepath", title: "Nothing cleaned yet",
+                           text: "Every clean, archive and uninstall shows up here, with what was removed and how much space it freed.")
+            } else {
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 4) {
-                    if lines.isEmpty { Text("Nothing cleaned yet.").font(W.body(13)).foregroundColor(W.faint) }
                     ForEach(Array(lines.enumerated()), id: \.offset) { _, l in
                         Text(l.replacingOccurrences(of: home, with: "~")).font(W.mono)
                             .foregroundColor(l.contains("FAILED") || l.contains("REFUSED") ? W.red
@@ -135,6 +143,7 @@ struct HistoryView: View {
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.horizontal, 28).padding(.bottom, 24)
+            }
             }
         }
         .onAppear(perform: load)
@@ -157,12 +166,40 @@ struct SettingsView: View {
     @AppStorage("autoClean") private var auto = AutoSchedule.off.rawValue
     @EnvironmentObject var store: Store
     @State private var autoResult: String?
+    @AppStorage("appearance") private var appearance = AppAppearance.system.rawValue
 
     var body: some View {
         VStack(spacing: 0) {
             PageHeader(title: "Settings", subtitle: "Tune how Wasevo Cleaner scans and cleans.")
             ScrollView {
                 VStack(spacing: 12) {
+                    Card {
+                        VStack(alignment: .leading, spacing: 14) {
+                            SettingRow("Appearance", "Light, dark, or follow your Mac.") {
+                                HStack(spacing: 6) {
+                                    ForEach(AppAppearance.allCases, id: \.self) { a in
+                                        let on = appearance == a.rawValue
+                                        Button { withAnimation(.easeInOut(duration: 0.25)) { appearance = a.rawValue } } label: {
+                                            HStack(spacing: 6) {
+                                                Image(systemName: a.icon)
+                                                Text(a.rawValue).font(W.body(12, .semibold))
+                                            }
+                                            .foregroundColor(on ? .white : W.muted)
+                                            .padding(.horizontal, 12).padding(.vertical, 7)
+                                            .background(Capsule().fill(on ? AnyShapeStyle(W.accent) : AnyShapeStyle(W.line)))
+                                        }
+                                        .buttonStyle(.plain)
+                                    }
+                                }
+                            }
+                            Divider().overlay(W.line)
+                            SettingRow("Stop permission pop-ups", "Give Wasevo Cleaner Full Disk Access once in System Settings (Privacy & Security > Full Disk Access). macOS then stops asking about folders and other apps' data.") {
+                                SecondaryButton(title: "Open Full Disk Access", icon: "lock.open") {
+                                    NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_AllFiles")!)
+                                }
+                            }
+                        }
+                    }
                     Card {
                         VStack(alignment: .leading, spacing: 14) {
                             SettingRow("A project is \"old\" after \(Int(staleDays)) days", "Build files of old projects are pre-selected in Smart Scan.") {

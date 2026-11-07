@@ -33,6 +33,7 @@ struct IdleView: View {
                 Feature(icon: "bolt.horizontal", title: "Knows what's in use", text: "Skips running apps, dev servers and builds.")
                 Feature(icon: "ruler", title: "Real sizes", text: "Measures what files truly use on disk.")
             }
+            .frame(maxWidth: 860)
             .padding(.horizontal, 40)
             Spacer()
         }
@@ -45,11 +46,11 @@ struct Feature: View {
     var body: some View {
         Card {
             VStack(alignment: .leading, spacing: 6) {
-                Image(systemName: icon).font(.system(size: 18, weight: .semibold)).foregroundColor(W.orange)
+                IconBadge(icon: icon, size: 32).padding(.bottom, 4)
                 Text(title).font(W.body(13, .semibold)).foregroundColor(W.text)
                 Text(text).font(W.body(12)).foregroundColor(W.faint).fixedSize(horizontal: false, vertical: true)
             }
-            .frame(maxWidth: .infinity, minHeight: 86, alignment: .topLeading)
+            .frame(maxWidth: .infinity, minHeight: 104, alignment: .topLeading)
         }
     }
 }
@@ -100,8 +101,8 @@ struct ResultsView: View {
 
     var header: some View {
         HStack(spacing: 14) {
-            Image(systemName: store.foundSize > 0 ? "sparkles" : "checkmark.seal.fill")
-                .font(.system(size: 30)).foregroundColor(W.orange)
+            IconBadge(icon: store.foundSize > 0 ? "sparkles" : "checkmark.seal.fill",
+                      color: store.foundSize > 0 ? W.orange : W.green, size: 48)
             VStack(alignment: .leading, spacing: 3) {
                 if store.foundSize > 0 {
                     (Text("We found ") + Text(human(store.foundSize)).foregroundColor(W.orange) + Text(" you can safely clean"))
@@ -128,8 +129,7 @@ struct ResultsView: View {
                         HStack(spacing: 12) {
                             CheckBox(on: st.on, mixed: st.mixed)
                                 .onTapGesture { store.setCategory(c, !(st.on || st.mixed)) }
-                            Image(systemName: c.icon).font(.system(size: 17)).foregroundColor(store.focus == c ? W.orange : W.muted)
-                                .frame(width: 22)
+                            IconBadge(icon: c.icon, color: store.focus == c ? W.orange : W.faint, size: 30)
                             VStack(alignment: .leading, spacing: 2) {
                                 Text(c.rawValue).font(W.body(14, .semibold)).foregroundColor(W.text)
                                 Text(human(store.size(of: c))).font(W.body(12, .semibold))
@@ -140,6 +140,7 @@ struct ResultsView: View {
                         }
                         .padding(.horizontal, 14).padding(.vertical, 12)
                         .background(RoundedRectangle(cornerRadius: 12).fill(store.focus == c ? W.panel2 : Color.clear))
+                        .overlay(RoundedRectangle(cornerRadius: 12).stroke(store.focus == c ? W.orange.opacity(0.35) : Color.clear, lineWidth: 1))
                         .contentShape(Rectangle())
                         .onTapGesture { store.focus = c }
                     }
@@ -180,7 +181,7 @@ struct ResultsView: View {
             PrimaryButton(title: "Clean", icon: "sparkles", disabled: store.selectedCount == 0) { confirming = true }
         }
         .padding(.horizontal, 28).padding(.vertical, 16)
-        .background(W.panel)
+        .background(.regularMaterial)
         .overlay(Rectangle().fill(W.line).frame(height: 1), alignment: .top)
     }
 }
@@ -286,7 +287,8 @@ struct DoneView: View {
     var body: some View {
         VStack(spacing: 20) {
             Spacer()
-            Image(systemName: "checkmark.circle.fill").font(.system(size: 64)).foregroundColor(W.green)
+            IconBadge(icon: "checkmark", color: W.green, size: 84)
+                .shadow(color: W.green.opacity(0.3), radius: 24)
             if let r = store.report {
                 if r.mode == .trash {
                     Text("Moved to Trash").font(W.display(30)).foregroundColor(W.text)

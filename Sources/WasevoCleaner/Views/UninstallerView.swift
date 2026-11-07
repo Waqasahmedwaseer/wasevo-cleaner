@@ -4,6 +4,7 @@ import AppKit
 // App Uninstaller: remove an app and the files it leaves behind. Everything goes to the Trash.
 
 final class UninstallModel: ObservableObject {
+    static let shared = UninstallModel()
     @Published var apps: [InstalledApp] = []
     @Published var loading = false
     @Published var selected: InstalledApp?
@@ -77,7 +78,7 @@ final class UninstallModel: ObservableObject {
 }
 
 struct UninstallerView: View {
-    @StateObject private var model = UninstallModel()
+    @ObservedObject private var model = UninstallModel.shared
     @State private var query = ""
     @State private var confirm = false
 
@@ -129,6 +130,7 @@ struct UninstallerView: View {
                             }
                             .padding(.horizontal, 12).padding(.vertical, 7)
                             .background(RoundedRectangle(cornerRadius: 8).fill(model.selected?.path == a.path ? W.panel2 : Color.clear))
+                            .overlay(RoundedRectangle(cornerRadius: 8).stroke(model.selected?.path == a.path ? W.orange.opacity(0.4) : Color.clear, lineWidth: 1))
                             .contentShape(Rectangle())
                             .onTapGesture { model.select(a) }
                         }
@@ -137,7 +139,7 @@ struct UninstallerView: View {
                 }
             }
         }
-        .background(RoundedRectangle(cornerRadius: 14).fill(W.panel))
+        .glassCard(radius: 14)
     }
 
     @ViewBuilder var detail: some View {
@@ -173,7 +175,7 @@ struct UninstallerView: View {
                     } else {
                         VStack(alignment: .leading, spacing: 2) {
                             Text(human(model.totalSize)).font(W.display(20)).foregroundColor(W.text)
-                            Text("app + \(model.chosen.count) leftover item(s) → Trash").font(W.body(11)).foregroundColor(W.faint)
+                            Text("App + \(model.chosen.count) leftover item(s) go to the Trash").font(W.body(11)).foregroundColor(W.faint)
                         }
                     }
                     Spacer()
@@ -182,18 +184,15 @@ struct UninstallerView: View {
                 }
                 .padding(18)
             } else {
-                Spacer()
                 VStack(spacing: 10) {
-                    Image(systemName: "shippingbox").font(.system(size: 40)).foregroundColor(W.orange)
-                    Text("Pick an app to see what it left on your Mac.").font(W.body(13)).foregroundColor(W.muted)
-                    if let m = model.message { Text(m).font(W.body(12, .semibold)).foregroundColor(W.green) }
+                    EmptyState(icon: "shippingbox", title: "Pick an app",
+                               text: "See the app and every file it left in your Library. Everything goes to the Trash, so you can put it back.")
+                    if let m = model.message { Text(m).font(W.body(12, .semibold)).foregroundColor(W.green).padding(.bottom, 30) }
                 }
-                .frame(maxWidth: .infinity)
-                Spacer()
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(RoundedRectangle(cornerRadius: 14).fill(W.panel))
+        .glassCard(radius: 14)
     }
 
     func leftoverRow(_ l: Leftover) -> some View {

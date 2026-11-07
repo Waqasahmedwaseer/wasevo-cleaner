@@ -114,6 +114,7 @@ final class Store: ObservableObject {
     func scan() {
         guard phase != .scanning && phase != .cleaning else { return }
         phase = .scanning
+        Activity.shared.start(.scan, "Scanning")
         report = nil
         status = "Checking running apps…"
         DispatchQueue.global(qos: .userInitiated).async {
@@ -161,6 +162,7 @@ final class Store: ObservableObject {
                 self.items = found
                 self.lastScan = Date()
                 self.phase = .results
+                Activity.shared.finish(.scan, "Found \(human(found.reduce(0) { $0 + $1.size })) you can clean.")
                 self.focus = Category.allCases.first { c in found.contains { $0.category == c } } ?? .system
                 self.refreshDisk()
             }
@@ -188,6 +190,7 @@ final class Store: ObservableObject {
         let chosen = items.filter { $0.selected && $0.blocked == nil }
         guard !chosen.isEmpty, phase == .results else { return }
         phase = .cleaning
+        Activity.shared.start(.scan, "Cleaning")
         let before = volumeFree()
         DispatchQueue.global(qos: .userInitiated).async {
             let snap = ProcSnapshot.take()   // re-check: things may have started since the scan
@@ -217,6 +220,7 @@ final class Store: ObservableObject {
             DispatchQueue.main.async {
                 self.report = CleanReport(freed: freed, cleaned: cleaned, skipped: skipped, failed: failed, mode: mode)
                 self.phase = .done
+                Activity.shared.finish(.scan, "Freed \(human(freed)).")
                 self.refreshDisk()
             }
         }

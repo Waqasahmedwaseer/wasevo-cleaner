@@ -4,7 +4,7 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-VERSION="0.2.0"
+VERSION="0.3.0"
 APP="dist/Wasevo Cleaner.app"
 
 swift build -c release
@@ -39,7 +39,9 @@ cat > "$APP/Contents/Info.plist" <<PLIST
 </dict></plist>
 PLIST
 
-codesign --force --deep -s - "$APP"
+# Ad-hoc signature with a STABLE identity (the bundle id) instead of the default per-build hash,
+# so macOS remembers your "Allow" answers across rebuilds instead of asking again every time.
+codesign --force --deep -s - -r='designated => identifier "com.wasevo.cleaner"' "$APP"
 echo "✓ built $APP"
 
 if [ "${1:-}" = "--install" ]; then
