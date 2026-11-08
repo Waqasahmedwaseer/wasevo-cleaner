@@ -19,7 +19,7 @@ struct WasevoCleanerApp: App {
 
     var body: some Scene {
         WindowGroup("Wasevo Cleaner", id: "main") {
-            RootView().environmentObject(store)
+            RootView().environmentObject(store).modifier(QuickLookHost())
         }
         .windowStyle(.hiddenTitleBar)
         .commands {

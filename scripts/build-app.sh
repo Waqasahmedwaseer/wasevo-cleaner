@@ -4,11 +4,22 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-VERSION="0.4.0"
+VERSION="0.5.0"
 APP="dist/Wasevo Cleaner.app"
 
-swift build -c release
-BIN="$(swift build -c release --show-bin-path)/WasevoCleaner"
+# Universal binary: Apple silicon + Intel (set ARCH=native for a quick local build)
+if [ "${ARCH:-universal}" = "native" ]; then
+  swift build -c release
+  BIN="$(swift build -c release --show-bin-path)/WasevoCleaner"
+else
+  swift build -c release --triple arm64-apple-macosx13.0
+  swift build -c release --triple x86_64-apple-macosx13.0
+  mkdir -p build
+  BIN="build/WasevoCleaner-universal"
+  lipo -create -output "$BIN" \
+    .build/arm64-apple-macosx/release/WasevoCleaner \
+    .build/x86_64-apple-macosx/release/WasevoCleaner
+fi
 
 if [ ! -f Resources/AppIcon.icns ]; then
   swift scripts/make-icon.swift

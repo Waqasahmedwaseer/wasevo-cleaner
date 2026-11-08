@@ -69,6 +69,7 @@ struct BigFileRow: View {
             }
             Spacer()
             Text(human(file.realSize)).font(W.body(14, .semibold)).foregroundColor(W.muted)
+            PreviewButton(path: file.path)
             Button { revealInFinder(file.path) } label: { Image(systemName: "magnifyingglass") }
                 .buttonStyle(.plain).foregroundColor(hover ? W.orange : W.faint).help("Show in Finder")
         }

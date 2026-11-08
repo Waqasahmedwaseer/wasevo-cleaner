@@ -165,6 +165,18 @@ struct RootView: View {
             if !onboarded { DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { showOnboarding = true } }
             // `--scan` starts a Smart Scan on launch (handy for scripts and screenshots)
             if CommandLine.arguments.contains("--scan") && store.phase == .idle { store.scan() }
+            // `--page "<page name>"` opens that page and `--rescan` scans it (for scripted screenshots and videos)
+            let args = CommandLine.arguments
+            if let i = args.firstIndex(of: "--page"), i + 1 < args.count, let p = Page(rawValue: args[i + 1]) {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                    nav.open(p)
+                    if args.contains("--rescan") { DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { nav.rescan() } }
+                }
+            }
+            // `--preview "<file>"` opens Quick Look on a file (for scripted checks)
+            if let i = args.firstIndex(of: "--preview"), i + 1 < args.count {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) { quickLook(args[i + 1]) }
+            }
         }
     }
 

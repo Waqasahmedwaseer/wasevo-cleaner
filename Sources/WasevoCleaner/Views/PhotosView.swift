@@ -135,18 +135,36 @@ struct PhotosView: View {
                 FileThumb(path: p.file.path, size: 150)
                     .overlay(RoundedRectangle(cornerRadius: 27).stroke(on ? W.orange : Color.clear, lineWidth: 3))
                     .opacity(on ? 0.75 : 1)
+                    .contentShape(Rectangle())
+                    .onTapGesture { quickLook(p.file.path, in: (group?.photos ?? m.bad).map(\.file.path)) }
+                    .help("Click to preview. Use the checkbox to select.")
                 CheckBox(on: on).padding(8)
+                    .contentShape(Rectangle())
+                    .onTapGesture { withAnimation(.spring(response: 0.25)) { m.toggle(p, group: group) } }
+                Image(systemName: "arrow.up.left.and.arrow.down.right")
+                    .font(.system(size: 11, weight: .bold)).foregroundColor(.white)
+                    .padding(7).background(Circle().fill(Color.black.opacity(0.45)))
+                    .padding(8)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
+                    .allowsHitTesting(false)
                 if best { Pill("Sharpest · keeps", W.green).padding(8).frame(maxWidth: .infinity, alignment: .trailing) }
                 if let issue = p.issue, group == nil { Pill(issue.rawValue, W.amber).padding(8).frame(maxWidth: .infinity, alignment: .trailing) }
             }
             .frame(width: 150, height: 150)
             .scaleEffect(on ? 0.97 : 1)
-            Text(p.file.name).font(W.body(11, .semibold)).foregroundColor(W.text).lineLimit(1).truncationMode(.middle)
-            Text(human(p.file.size)).font(W.body(10)).foregroundColor(W.faint)
+            VStack(alignment: .leading, spacing: 6) {
+                Text(p.file.name).font(W.body(11, .semibold)).foregroundColor(W.text).lineLimit(1).truncationMode(.middle)
+                Text(human(p.file.size)).font(W.body(10)).foregroundColor(W.faint)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .contentShape(Rectangle())
+            .onTapGesture { withAnimation(.spring(response: 0.25)) { m.toggle(p, group: group) } }
         }
         .frame(width: 150)
-        .contentShape(Rectangle())
-        .onTapGesture { withAnimation(.spring(response: 0.25)) { m.toggle(p, group: group) } }
-        .contextMenu { Button("Show in Finder") { revealInFinder(p.file.path) } }
+        .contextMenu {
+            Button("Preview") { quickLook(p.file.path, in: (group?.photos ?? m.bad).map(\.file.path)) }
+            Button(on ? "Deselect" : "Select") { withAnimation(.spring(response: 0.25)) { m.toggle(p, group: group) } }
+            Button("Show in Finder") { revealInFinder(p.file.path) }
+        }
     }
 }

@@ -129,6 +129,8 @@ struct DuplicatesView: View {
         VStack(alignment: .leading, spacing: 0) {
             HStack(spacing: 10) {
                 FileThumb(path: g.files[0].path, size: 30)
+                    .onTapGesture { quickLook(g.files[0].path, in: g.files.map(\.path)) }
+                    .help("Preview")
                 Text(g.files[0].name).font(W.body(13, .semibold)).foregroundColor(W.text).lineLimit(1)
                 Pill(g.kind, W.faint)
                 Spacer()
@@ -146,6 +148,7 @@ struct DuplicatesView: View {
                     }
                     Spacer()
                     if !on { Pill("Keeps", W.green) }
+                    PreviewButton(path: f.path, group: g.files.map(\.path))
                     Button { revealInFinder(f.path) } label: { Image(systemName: "magnifyingglass") }
                         .buttonStyle(.plain).foregroundColor(W.faint).help("Show in Finder")
                 }
@@ -259,12 +262,15 @@ struct DownloadsView: View {
         return HStack(spacing: 14) {
             CheckBox(on: on)
             FileThumb(path: d.path, size: 34)
+                .onTapGesture { quickLook(d.path, in: m.items.map(\.path)) }
+                .help("Preview")
             VStack(alignment: .leading, spacing: 3) {
                 Text(d.name).font(W.body(13, .semibold)).foregroundColor(W.text).lineLimit(1).truncationMode(.middle)
                 Text(d.days > 3650 ? "Never opened" : "Last opened \(d.days) days ago").font(W.body(11)).foregroundColor(W.faint)
             }
             Spacer()
-            Button { revealInFinder(d.path) } label: { Image(systemName: "magnifyingglass") }.buttonStyle(.plain).foregroundColor(W.faint)
+            PreviewButton(path: d.path, group: m.items.map(\.path))
+            Button { revealInFinder(d.path) } label: { Image(systemName: "magnifyingglass") }.buttonStyle(.plain).foregroundColor(W.faint).help("Show in Finder")
             Text(human(d.size)).font(W.body(13, .semibold)).foregroundColor(W.muted).frame(width: 80, alignment: .trailing)
         }
         .padding(.horizontal, 12).padding(.vertical, 9)
