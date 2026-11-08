@@ -17,7 +17,7 @@ Smart Scan, duplicate finder, similar photo cleaner, app uninstaller, startup it
 
 <p align="center"><img src="docs/demo.gif" width="720" alt="Wasevo Cleaner demo: Space Map, Projects, Duplicates and Photo Cleaner on macOS"></p>
 
-<p align="center"><a href="https://github.com/Waqasahmedwaseer/wasevo-cleaner/releases/latest">Watch the full 60-second launch video</a> · <a href="https://wasevo.com">wasevo.com</a></p>
+<p align="center"><a href="https://github.com/Waqasahmedwaseer/wasevo-cleaner/releases/latest">Download the latest release</a> · <a href="https://wasevo.com">wasevo.com</a></p>
 
 ---
 
