@@ -224,12 +224,19 @@ func declaredFolders(_ command: String) -> [String] {
     }
 }
 
+/// "~/…/demo-mysql/data" style: home as ~, long paths cut to their last two folders.
+func shortPath(_ p: String) -> String {
+    let t = p.hasPrefix(home) ? "~" + p.dropFirst(home.count) : Substring(p)
+    let parts = t.split(separator: "/")
+    return t.count <= 48 || parts.count <= 3 ? String(t) : "…/" + parts.suffix(2).joined(separator: "/")
+}
+
 func analyze(name: String, command: String, kind: ServiceKind, cwd: String?, ppid: pid_t, cpu: Double,
              runningFor: TimeInterval, written: Int64, hidden: Int64, fileExists: (String) -> Bool = { FileManager.default.fileExists(atPath: $0) }) -> [ServiceWarning] {
     var w: [ServiceWarning] = []
     let gone = declaredFolders(command).filter { !fileExists($0) }
     if let first = gone.first {
-        w.append(.init(level: .problem, text: "Its data folder was deleted (\(first)). It is left over and safe to stop."))
+        w.append(.init(level: .problem, text: "Its data folder was deleted (\(shortPath(first))). It is left over and safe to stop."))
     } else if let c = cwd, c != "/", !fileExists(c) {
         w.append(.init(level: .problem, text: "The folder it was started in no longer exists. It is left over and safe to stop."))
     }
