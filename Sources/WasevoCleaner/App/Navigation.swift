@@ -44,7 +44,7 @@ enum WeeklyReport {
 
 enum SettingsTransfer {
     /// Only plain preferences travel. No history, no scan results, nothing personal.
-    static let keys = ["staleDays", "lowSpaceGB", "projectRoots", "deleteMode", "autoClean", "appearance", "weeklyReport"]
+    static let keys = ["staleDays", "lowSpaceGB", "projectRoots", "deleteMode", "autoClean", "appearance", "weeklyReport", "autoUpdateCheck"]
 
     static func export() {
         let panel = NSSavePanel()

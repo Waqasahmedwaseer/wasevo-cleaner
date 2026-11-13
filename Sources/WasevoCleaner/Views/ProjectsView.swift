@@ -51,6 +51,34 @@ final class ProjectsModel: ObservableObject {
         }
     }
 
+    /// One click: clean the build files of every project in `list` that nothing is using right now.
+    /// Projects open in a terminal, dev server or app are skipped, and every folder is re-checked just before removal.
+    func cleanAll(_ list: [Project]) {
+        let targets = list.filter { $0.buildSize > 0 && !$0.inUse }
+        guard !targets.isEmpty, busy == nil else { return }
+        busy = "__all__"
+        Activity.shared.start(.projects, "Cleaning build files")
+        let mode: DeleteMode = UserDefaults.standard.object(forKey: "deleteMode") as? Bool == false ? .trash : .permanent
+        DispatchQueue.global(qos: .userInitiated).async {
+            var freed: Int64 = 0, skipped = 0
+            for (i, p) in targets.enumerated() {
+                DispatchQueue.main.async { self.progress = "Cleaning \(p.name) (\(i + 1) of \(targets.count))…"; self.message = self.progress }
+                let r = cleanBuildFiles(p, mode)
+                freed += r.freed; skipped += r.skipped
+            }
+            log("CLEAN ALL PROJECTS \(targets.count) projects · \(human(freed)) freed · \(skipped) skipped")
+            DispatchQueue.main.async {
+                self.busy = nil
+                let left = list.filter { $0.inUse && $0.buildSize > 0 }.count
+                self.message = "Cleaned \(targets.count) projects: \(human(freed)) freed."
+                    + (skipped > 0 ? " \(skipped) folders skipped because they came into use." : "")
+                    + (left > 0 ? " \(left) open projects were left alone." : "")
+                Activity.shared.finish(.projects, "\(human(freed)) of build files removed.")
+                self.load()
+            }
+        }
+    }
+
     private func refresh(_ path: String) {
         DispatchQueue.global().async {
             let snap = ProcSnapshot.take()
@@ -74,6 +102,7 @@ struct ProjectsView: View {
     @State private var onlyOld = false
     @State private var toArchive: Project?
     @State private var toClean: Project?
+    @State private var askAll = false
 
     var list: [Project] {
         let l = model.projects.filter { !onlyOld || $0.stale }
@@ -88,7 +117,13 @@ struct ProjectsView: View {
         VStack(spacing: 0) {
             HStack(alignment: .bottom) {
                 PageHeader(title: "Projects", subtitle: "Every project on your Mac. Clean rebuildable build files, or zip old projects you're not using.")
-                SecondaryButton(title: "Rescan", icon: "arrow.clockwise") { model.load() }.padding(.trailing, 28).padding(.bottom, 14)
+                HStack(spacing: 8) {
+                    SecondaryButton(title: "Rescan", icon: "arrow.clockwise") { model.load() }
+                    if !model.loading && allSize > 0 {
+                        PrimaryButton(title: "Clean all · \(human(allSize))", icon: "sparkles", disabled: model.busy != nil) { askAll = true }
+                    }
+                }
+                .padding(.trailing, 28).padding(.bottom, 14)
             }
             toolbar
             if model.loading {
@@ -114,6 +149,13 @@ struct ProjectsView: View {
             }
         }
         .onAppear { if model.projects.isEmpty { model.load() } }
+        .alert("Clean the build files of \(cleanable.count) projects?", isPresented: $askAll) {
+            Button("Clean all · \(human(allSize))") { model.cleanAll(list) }
+            if idleSize > 0 && idleSize < allSize {
+                Button("Only idle \(Int(Prefs.staleDays))+ days · \(human(idleSize))") { model.cleanAll(list.filter(\.stale)) }
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: { Text(allMessage) }
         .alert("Archive \(toArchive?.name ?? "")?", isPresented: Binding(get: { toArchive != nil }, set: { if !$0 { toArchive = nil } })) {
             Button("Zip and move to Trash") { if let p = toArchive { model.archive(p) }; toArchive = nil }
             Button("Cancel", role: .cancel) { toArchive = nil }
@@ -124,8 +166,23 @@ struct ProjectsView: View {
             Button("Clean \(human(toClean?.buildSize ?? 0))") { if let p = toClean { model.clean(p) }; toClean = nil }
             Button("Cancel", role: .cancel) { toClean = nil }
         } message: {
-            Text((toClean?.buildFiles.map { $0.kind }.joined(separator: ", ") ?? "") + " will be removed. They are rebuilt by npm/pnpm install or cargo build. Your code is not touched.")
+            Text(Set(toClean?.buildFiles.map(\.kind) ?? []).sorted().map { "\($0): \(rebuildHint($0))" }.joined(separator: "\n") + "\n\nYour code is not touched.")
         }
+    }
+
+    /// Projects the one-click clean would touch (shown list, has build files, not open anywhere).
+    var cleanable: [Project] { list.filter { $0.buildSize > 0 && !$0.inUse } }
+    var allSize: Int64 { cleanable.reduce(0) { $0 + $1.buildSize } }
+    var idleSize: Int64 { cleanable.filter(\.stale).reduce(0) { $0 + $1.buildSize } }
+
+    var allMessage: String {
+        var counts: [String: Int] = [:]
+        for p in cleanable { for a in p.buildFiles where a.blocked == nil { counts[a.kind, default: 0] += 1 } }
+        let kinds = counts.sorted { $0.value > $1.value }.map { "\($0.key) ×\($0.value)" }.joined(separator: ", ")
+        let open = list.filter { $0.inUse && $0.buildSize > 0 }.count
+        return "\(kinds)\n\nOnly folders that can be rebuilt (npm install, composer install, cargo build…) are removed. Your code, git history and settings stay."
+            + (open > 0 ? " \(open) projects open in a terminal or dev server are skipped." : "")
+            + " A project you open again just needs its install or build command."
     }
 
     var archiveMessage: String {
@@ -174,7 +231,7 @@ struct ProjectsView: View {
                 ProgressView().controlSize(.small).frame(width: 190)
             } else {
                 HStack(spacing: 6) {
-                    smallButton("Clean build", disabled: p.buildSize == 0 || p.inUse) { toClean = p }
+                    smallButton("Clean build", disabled: p.buildSize == 0 || p.inUse || model.busy != nil) { toClean = p }
                     smallButton("Archive", disabled: p.inUse || model.busy != nil) { toArchive = p }
                     Button { revealInFinder(p.path) } label: { Image(systemName: "magnifyingglass") }
                         .buttonStyle(.plain).foregroundColor(W.muted)

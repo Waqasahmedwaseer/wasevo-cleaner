@@ -98,6 +98,7 @@ struct CacheRule {
     var olderThanDays: Double = 0       // contentsOnly: only items older than this
     var blockIfRunning: [String] = []   // skip while any of these processes run
     var selectedByDefault = true
+    var keepIf: ((String) -> Bool)? = nil   // contentsOnly: extra per-item check (true = offer it)
     var autoClean: Bool { risk == .safe && selectedByDefault && category != .projects && category != .tools }
 }
 
@@ -149,6 +150,11 @@ let CACHE_RULES: [CacheRule] = [
     CacheRule(category: .developer, risk: .redownload, name: "Arduino download archives", paths: ["~/Library/Arduino15/staging"],
               note: "Archives of already-installed boards/tools.", contentsOnly: true, blockIfRunning: ["Arduino IDE"]),
 
+    CacheRule(category: .developer, risk: .safe, name: "Old editor extension versions",
+              paths: ["~/.vscode/extensions", "~/.cursor/extensions", "~/.windsurf/extensions", "~/.vscode-insiders/extensions"],
+              note: "Versions the editor already replaced and marked obsolete. The versions you use stay.",
+              contentsOnly: true, keepIf: isObsoleteExtension),
+
     CacheRule(category: .system, risk: .safe, name: "VS Code caches", paths: electronCaches("Code"),
               note: "Browser-style caches inside VS Code. Settings, extensions and history stay.",
               blockIfRunning: ["Code", "Code Helper"]),
@@ -182,6 +188,20 @@ let CACHE_RULES: [CacheRule] = [
               contentsOnly: true, onlyExtensions: ["dmg", "pkg", "iso", "mpkg"], olderThanDays: 30, selectedByDefault: false),
 ]
 
+/// An extension folder is obsolete only when the editor listed it in `.obsolete` AND its
+/// `extensions.json` (the list of installed versions) no longer points to it.
+func isObsoleteExtension(_ path: String) -> Bool {
+    let dir = (path as NSString).deletingLastPathComponent, name = (path as NSString).lastPathComponent
+    guard let od = FileManager.default.contents(atPath: dir + "/.obsolete"),
+          let obsolete = try? JSONSerialization.jsonObject(with: od) as? [String: Any], obsolete[name] != nil,
+          let ed = FileManager.default.contents(atPath: dir + "/extensions.json"),
+          let installed = try? JSONSerialization.jsonObject(with: ed) as? [[String: Any]] else { return false }
+    let inUse = installed.contains { e in
+        (e["relativeLocation"] as? String) == name || ((e["location"] as? [String: Any])?["path"] as? String)?.hasSuffix("/" + name) == true
+    }
+    return !inUse
+}
+
 // MARK: tool cleanups (each uses the tool's own safe command)
 
 struct ToolTask {
@@ -204,6 +224,10 @@ let TOOL_TASKS: [ToolTask] = [
              command: "mysql -e 'PURGE BINARY LOGS BEFORE NOW() - INTERVAL 3 DAY'",
              note: "MySQL's own PURGE command keeps the database healthy. Needs your login in ~/.my.cnf.",
              selectedByDefault: false),
+    ToolTask(name: "Go module cache", binary: "go", command: "go clean -modcache",
+             note: "Downloaded Go modules. Go downloads them again on the next build.", selectedByDefault: false),
+    ToolTask(name: "Dart / Flutter package cache", binary: "dart", command: "dart pub cache clean --force",
+             note: "Downloaded pub packages. flutter pub get downloads them again.", selectedByDefault: false),
     ToolTask(name: "Xcode simulators for removed iOS versions", binary: "xcrun",
              command: "xcrun simctl delete unavailable",
              note: "Only simulators whose iOS runtime is no longer installed.", selectedByDefault: false),

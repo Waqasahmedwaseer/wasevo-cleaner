@@ -5,7 +5,7 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-VERSION=$(grep -m1 '^VERSION=' scripts/build-app.sh | cut -d'"' -f2)
+VERSION=${VERSION:-$(grep -m1 '^VERSION=' scripts/build-app.sh | grep -oE '[0-9]+\.[0-9]+\.[0-9]+')}
 NAME="Wasevo Cleaner"
 APP="dist/$NAME.app"
 DMG="dist/Wasevo-Cleaner-$VERSION.dmg"
@@ -58,3 +58,8 @@ hdiutil detach -quiet "$DEV"
 hdiutil convert -quiet "$RW" -format UDZO -imagekey zlib-level=9 -o "$DMG"
 rm -f "$RW"
 echo "✓ $DMG"
+
+# keep the Homebrew cask in step with this DMG
+SHA=$(shasum -a 256 "$DMG" | cut -d' ' -f1)
+sed -i '' -e "s/^  version \".*\"/  version \"$VERSION\"/" -e "s/^  sha256 \".*\"/  sha256 \"$SHA\"/" Casks/wasevo-cleaner.rb
+echo "✓ Casks/wasevo-cleaner.rb -> $VERSION ($SHA)"

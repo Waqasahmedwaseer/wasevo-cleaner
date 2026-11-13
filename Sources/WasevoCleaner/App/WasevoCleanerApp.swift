@@ -33,6 +33,10 @@ struct WasevoCleanerApp: App {
                     NSApp.orderFrontStandardAboutPanel(options: [.credits: credits])
                     NSApp.activate(ignoringOtherApps: true)
                 }
+                Button("Check for Updates...") {
+                    Nav.shared.open(.settings)
+                    SelfUpdate.shared.check()
+                }
             }
             CommandMenu("Go") {
                 // ⌘1 … ⌘9 jump to the first nine pages
@@ -75,6 +79,7 @@ struct WasevoCleanerApp: App {
 struct MenuBarContent: View {
     @EnvironmentObject var store: Store
     @ObservedObject private var mon = SystemMonitor.shared
+    @ObservedObject private var up = SelfUpdate.shared
     @Environment(\.openWindow) private var openWindow
 
     var body: some View {
@@ -82,6 +87,10 @@ struct MenuBarContent: View {
         if store.isLow { Label("Disk space is low", systemImage: "exclamationmark.triangle") }
         Text("CPU \(Int(mon.cpu * 100))% · Memory \(human(mon.memory.used)) of \(human(mon.memory.total))")
         if let b = mon.battery { Text("Battery \(b.percent)%\(b.charging ? " (charging)" : "")") }
+        if up.isAvailable, let v = up.latest?.version {
+            Divider()
+            Button("Update to version \(v)...") { show(); Nav.shared.open(.settings) }
+        }
         Divider()
         Button("Open Wasevo Cleaner") { show() }.keyboardShortcut("o")
         Button("Smart Scan") { show(); store.scan() }.keyboardShortcut("s")

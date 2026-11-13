@@ -3,7 +3,7 @@ import Foundation
 // Wasevo Cleaner — Projects: every project's size, build files and last edit, with safe actions.
 
 let PROJECT_MARKERS = ["package.json", "Cargo.toml", "composer.json", "pyproject.toml", "go.mod", "pubspec.yaml",
-                       "Gemfile", "build.gradle", "Package.swift", ".git"]
+                       "Gemfile", "build.gradle", "build.gradle.kts", "Package.swift", "mix.exs", "build.zig", "CMakeLists.txt", "Podfile", ".git"]
 let ARCHIVE_DIR = h("~/Wasevo Archives")
 
 struct Project: Identifiable {
@@ -100,7 +100,7 @@ func cleanBuildFiles(_ p: Project, _ mode: DeleteMode) -> (freed: Int64, skipped
     let snap = ProcSnapshot.take()
     var freed: Int64 = 0, skipped = 0
     for a in p.buildFiles {
-        if blockReason(path: a.path, project: a.project, isRust: a.kind == "Rust target", snap: snap) != nil { skipped += 1; continue }
+        if blockReason(path: a.path, project: a.project, kind: a.kind, snap: snap) != nil { skipped += 1; continue }
         if removePath(a.path, mode) { freed += a.size } else { skipped += 1 }
     }
     return (freed, skipped)

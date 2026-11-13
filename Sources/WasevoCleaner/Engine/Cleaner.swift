@@ -106,6 +106,7 @@ func ruleTargets(_ r: CacheRule) -> [String] {
                 if -m.timeIntervalSinceNow < r.olderThanDays * 86400 { continue }
             }
             if protectedReason(p) != nil { continue }
+            if let keep = r.keepIf, !keep(p) { continue }
             out.append(p)
         }
     }

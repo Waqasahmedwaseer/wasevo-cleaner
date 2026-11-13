@@ -99,11 +99,74 @@ func lastEdit(of project: String) -> Date {
     return newest == .distantPast ? Date() : newest
 }
 
-func blockReason(path: String, project: String, isRust: Bool, snap: ProcSnapshot) -> String? {
+func blockReason(path: String, project: String, kind: String, snap: ProcSnapshot) -> String? {
     if snap.hasExe(inside: path) { return "an app is running from it" }
-    if isRust, let p = snap.running(["cargo", "rustc"]) { return "\(p) is running" }
+    if let tools = buildRule(forKind: kind)?.blockIfRunning, !tools.isEmpty, let p = snap.running(tools) { return "\(p) is running" }
     if snap.hasCwd(inside: project) { return "a terminal/dev server is open in it" }
     return nil
+}
+
+/// One kind of rebuildable build folder. It is offered only when the files that rebuild it sit next to it
+/// (`needs`: all of them, `needsAny`: at least one), and never when the folder is committed to git.
+struct BuildRule {
+    let dir: String                 // folder name (or prefix when `prefix` is true)
+    let kind: String
+    var needs: [String] = []
+    var needsAny: [String] = []
+    var prefix = false
+    let rebuild: String             // how you get it back
+    var blockIfRunning: [String] = []
+}
+
+let BUILD_RULES: [BuildRule] = [
+    BuildRule(dir: "node_modules", kind: "node_modules", needs: ["package.json"], rebuild: "npm / pnpm / yarn install"),
+    BuildRule(dir: ".next", kind: ".next", needs: ["package.json"], rebuild: "next build or next dev"),
+    BuildRule(dir: ".nuxt", kind: ".nuxt", needs: ["package.json"], rebuild: "nuxt dev or nuxt build"),
+    BuildRule(dir: ".output", kind: "Nuxt output", needs: ["package.json"], needsAny: ["nuxt.config.ts", "nuxt.config.js", "nuxt.config.mjs"], rebuild: "nuxt build"),
+    BuildRule(dir: ".turbo", kind: ".turbo", needs: ["package.json"], rebuild: "the next turbo run"),
+    BuildRule(dir: ".svelte-kit", kind: ".svelte-kit", needs: ["package.json"], rebuild: "vite dev or vite build"),
+    BuildRule(dir: ".parcel-cache", kind: "Parcel cache", needs: ["package.json"], rebuild: "the next parcel build"),
+    BuildRule(dir: ".angular", kind: "Angular cache", needs: ["angular.json"], rebuild: "the next ng build"),
+    BuildRule(dir: ".expo", kind: "Expo cache", needs: ["package.json"], rebuild: "the next expo start"),
+    BuildRule(dir: ".docusaurus", kind: "Docusaurus cache", needs: ["package.json"], rebuild: "the next docusaurus build"),
+    BuildRule(dir: "target", kind: "Rust target", needs: ["Cargo.toml"], prefix: true, rebuild: "cargo build", blockIfRunning: ["cargo", "rustc"]),
+    BuildRule(dir: "vendor", kind: "PHP vendor", needs: ["composer.json", "composer.lock"], rebuild: "composer install", blockIfRunning: ["composer"]),
+    BuildRule(dir: ".venv", kind: "Python venv", needsAny: ["uv.lock", "poetry.lock", "Pipfile.lock", "pdm.lock"], rebuild: "uv sync / poetry install / pipenv install"),
+    BuildRule(dir: "venv", kind: "Python venv", needsAny: ["uv.lock", "poetry.lock", "Pipfile.lock", "pdm.lock"], rebuild: "uv sync / poetry install / pipenv install"),
+    BuildRule(dir: "Pods", kind: "CocoaPods", needs: ["Podfile.lock"], rebuild: "pod install", blockIfRunning: ["pod", "xcodebuild"]),
+    BuildRule(dir: ".build", kind: "Swift build", needs: ["Package.swift"], rebuild: "swift build", blockIfRunning: ["swift-build", "swift-frontend"]),
+    BuildRule(dir: ".dart_tool", kind: "Dart tool", needs: ["pubspec.yaml"], rebuild: "flutter pub get"),
+    BuildRule(dir: "build", kind: "Flutter build", needs: ["pubspec.yaml"], rebuild: "flutter build"),
+    BuildRule(dir: "build", kind: "Gradle build", needsAny: ["build.gradle", "build.gradle.kts"], rebuild: "the next Gradle build"),
+    BuildRule(dir: ".gradle", kind: "Gradle project cache", needsAny: ["settings.gradle", "settings.gradle.kts", "build.gradle", "build.gradle.kts"], rebuild: "the next Gradle build"),
+    BuildRule(dir: "_build", kind: "Elixir build", needs: ["mix.exs"], rebuild: "mix compile"),
+    BuildRule(dir: "deps", kind: "Elixir deps", needs: ["mix.exs", "mix.lock"], rebuild: "mix deps.get"),
+    BuildRule(dir: ".zig-cache", kind: "Zig cache", needs: ["build.zig"], rebuild: "zig build"),
+    BuildRule(dir: "zig-cache", kind: "Zig cache", needs: ["build.zig"], rebuild: "zig build"),
+    BuildRule(dir: "cmake-build-", kind: "CMake build", needs: ["CMakeLists.txt"], prefix: true, rebuild: "the next CMake build"),
+]
+private let BUILD_DIR_NAMES = Set(BUILD_RULES.filter { !$0.prefix }.map(\.dir))
+
+func buildRule(forKind k: String) -> BuildRule? { BUILD_RULES.first { $0.kind == k } }
+func rebuildHint(_ kind: String) -> String { buildRule(forKind: kind).map { "Rebuilt by \($0.rebuild)." } ?? "Rebuilt on the next build." }
+
+/// The rule a folder matches, if its project really can rebuild it.
+func matchBuildRule(name: String, project: String) -> BuildRule? {
+    let fm = FileManager.default
+    let has = { (f: String) in fm.fileExists(atPath: (project as NSString).appendingPathComponent(f)) }
+    for r in BUILD_RULES where r.prefix ? name.hasPrefix(r.dir) : name == r.dir {
+        guard r.needs.allSatisfy(has), r.needsAny.isEmpty || r.needsAny.contains(where: has) else { continue }
+        if r.dir == "node_modules" && !hasLockfile(from: project) { continue }
+        return r
+    }
+    return nil
+}
+
+/// A build folder that is committed to git is part of the source; never offer it.
+func isTrackedInGit(_ path: String, project: String) -> Bool {
+    let q = { (s: String) in "'" + s.replacingOccurrences(of: "'", with: "'\\''") + "'" }
+    let r = sh("git -C \(q(project)) ls-files -- \(q(path)) 2>/dev/null | head -1", timeout: 10)
+    return r.code == 0 && !r.out.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
 }
 
 func scanProjects(snap: ProcSnapshot) -> [Artifact] {
@@ -118,29 +181,19 @@ func scanProjects(snap: ProcSnapshot) -> [Artifact] {
             guard v?.isDirectory == true, v?.isSymbolicLink != true else { continue }
             if en.level > 7 { en.skipDescendants(); continue }
             let name = u.lastPathComponent
-            if SKIP_DIRS.contains(name) { en.skipDescendants(); continue }
-            let isRust = name == "target" || name.hasPrefix("target-")
-            guard isRust || ARTIFACT_DIRS.contains(name) else { continue }
-            en.skipDescendants()
-
+            let candidate = BUILD_DIR_NAMES.contains(name) || name.hasPrefix("target-") || name.hasPrefix("cmake-build-")
             let project = u.deletingLastPathComponent().path
-            let has = { (f: String) in fm.fileExists(atPath: (project as NSString).appendingPathComponent(f)) }
-            let kind: String
-            if isRust {
-                guard has("Cargo.toml") else { continue }
-                kind = "Rust target"
-            } else if name == "node_modules" {
-                guard has("package.json"), hasLockfile(from: project) else { continue }
-                kind = "node_modules"
-            } else {
-                guard has("package.json") else { continue }
-                kind = name
+            if candidate, let rule = matchBuildRule(name: name, project: project) {
+                en.skipDescendants()
+                guard !isTrackedInGit(u.path, project: project) else { continue }
+                let size = dirSize(u.path)
+                guard size >= MIN_ARTIFACT_BYTES else { continue }
+                out.append(Artifact(path: u.path, kind: rule.kind, project: project, size: size,
+                                    lastEdit: lastEdit(of: project),
+                                    blocked: blockReason(path: u.path, project: project, kind: rule.kind, snap: snap)))
+                continue
             }
-            let size = dirSize(u.path)
-            guard size >= MIN_ARTIFACT_BYTES else { continue }
-            out.append(Artifact(path: u.path, kind: kind, project: project, size: size,
-                                lastEdit: lastEdit(of: project),
-                                blocked: blockReason(path: u.path, project: project, isRust: isRust, snap: snap)))
+            if SKIP_DIRS.contains(name) || ARTIFACT_DIRS.contains(name) || (name.hasPrefix(".") && name != ".claude") { en.skipDescendants() }
         }
     }
     return out.sorted { $0.size > $1.size }

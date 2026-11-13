@@ -39,7 +39,7 @@ Wasevo Cleaner is built the other way round:
 |---|---|
 | **Smart Scan** | One click checks junk, caches, duplicates, app updates and startup items, grouped into categories you can tick on and off. |
 | **Space Map** | A treemap of your home folder. Click any block to see exactly where your disk space went. View only. |
-| **Projects** | Every code project with its size, last edit and git status. Clears rebuildable build files (`node_modules`, Rust `target`, `.next`, `.nuxt`, `.turbo`, `.svelte-kit`) or zips an old project to `~/Wasevo Archives`. |
+| **Projects** | Every code project with its size, last edit and git status. **Clean all** rebuildable build files in one click (or only projects idle 14+ days): `node_modules`, Rust `target`, `.next`, PHP `vendor`, Python `.venv`, Gradle `build`, Swift `.build`, Flutter, CocoaPods and more. Or zip an old project to `~/Wasevo Archives`. |
 | **Duplicates** | Finds files that are byte-for-byte identical in Downloads, Desktop, Documents, Pictures, Movies and Music. Keeps the oldest or newest copy, your choice. |
 | **Photo Cleaner** | Groups similar shots and keeps the sharpest one, and finds blurry, very dark or overexposed photos. Click any photo to preview it. Your Apple Photos library is never touched. |
 | **Old Downloads** | Large downloads you haven't opened in months. |
@@ -51,6 +51,7 @@ Wasevo Cleaner is built the other way round:
 | **Browser Privacy** | Clear cache, history and cookies per browser and per profile (Chrome, Brave, Edge, Arc, Vivaldi, Firefox). Saved passwords, bookmarks and autofill are never touched. |
 | **Startup Items** | Helpers and agents that start by themselves. Turning one off is fully reversible. |
 | **System Monitor** | Live CPU, memory, disk and battery health, plus the apps using the most. |
+| **Running Services** | Every local server, database, dev server and container with its ports, CPU, memory and disk writes. Finds **leftovers**: processes whose folder was deleted, or that still hold deleted files (space no folder scan can see). Stop them in one click. |
 | **Maintenance** | Apple's own maintenance commands in one click: check disk, flush DNS cache, rebuild the Spotlight index. |
 | **App Updates** | Which apps (App Store and Homebrew) have a newer version. |
 
@@ -61,7 +62,7 @@ Wasevo Cleaner is built the other way round:
 | **Protected** | The full list of what Wasevo Cleaner will never delete, even if you ask. |
 | **History** | Every deletion, trash and skip, logged to `~/Library/Logs/WasevoCleaner.log`. |
 
-**Also:** Quick Look preview for photos and files (click a thumbnail or the eye button, use the arrow keys to browse a group), undo, keyboard shortcuts, light and dark themes, a menu-bar free-space monitor, and optional daily or weekly auto-clean of Safe caches only.
+**Also:** one-click updates from GitHub Releases, Quick Look preview for photos and files (click a thumbnail or the eye button, use the arrow keys to browse a group), undo, keyboard shortcuts, light and dark themes, a menu-bar free-space monitor, and optional daily or weekly auto-clean of Safe caches only.
 
 ## Screenshots
 
@@ -80,11 +81,11 @@ Wasevo Cleaner is built the other way round:
 | Category | Items |
 |---|---|
 | System and app caches | `~/Library/Caches` (Apple caches skipped), Chrome on-device AI model, Google Updater downloads, VS Code installer cache, leftover browser update copies |
-| Developer caches | npm, uv, Bun, Composer, Yarn, Cargo registry, shared Rust targets, Playwright and Puppeteer browsers, Gradle, Xcode DerivedData, Arduino archives |
-| Project build files | `node_modules`, `target`, `.next`, `.nuxt`, `.turbo`, `.svelte-kit` (only when they can be rebuilt) |
+| Developer caches | npm, uv, Bun, Composer, Yarn, Cargo registry, shared Rust targets, Playwright and Puppeteer browsers, Gradle, Xcode DerivedData, Arduino archives, old VS Code / Cursor / Windsurf extension versions |
+| Project build files | `node_modules`, `target`, `.next`, `.nuxt`, `.turbo`, `.svelte-kit`, PHP `vendor`, Python `.venv`, Gradle `build`, Swift `.build`, Flutter `build` / `.dart_tool`, CocoaPods `Pods`, Nuxt `.output`, Angular / Parcel / Expo caches, Elixir, Zig, CMake (only when the lockfile or project file that rebuilds them is there, and never when committed to git) |
 | AI tools | Claude, Cursor and Windsurf caches, Gemini CLI temp files, old Claude Code and Codex sessions (opt-in), Hugging Face models unused for 90+ days (opt-in) |
 | Downloads and logs | Crash reports older than 7 days, old `.dmg` and `.pkg` installers (opt-in) |
-| Tool-native cleanups | Docker build cache, `pnpm store prune`, `brew cleanup`, MySQL binary logs (opt-in), unavailable Xcode simulators (opt-in) |
+| Tool-native cleanups | Docker build cache, `pnpm store prune`, `brew cleanup`, MySQL binary logs (opt-in), unavailable Xcode simulators (opt-in), Go module cache (opt-in), Dart / Flutter package cache (opt-in) |
 
 ## Install
 
@@ -96,6 +97,19 @@ Wasevo Cleaner is built the other way round:
 4. For a complete scan, allow **Full Disk Access** when the app asks (System Settings, Privacy & Security). It works without it but sees less.
 
 Requires macOS 13 Ventura or later.
+
+### Homebrew
+
+```bash
+brew tap waqasahmedwaseer/wasevo-cleaner https://github.com/Waqasahmedwaseer/wasevo-cleaner
+brew install --cask wasevo-cleaner
+```
+
+The first launch needs the same right-click, **Open** as the DMG until releases are notarized.
+
+### Updates
+
+Wasevo Cleaner checks GitHub Releases on launch and once a day, and shows **Update available** in the sidebar. One click downloads the new version, checks it against the SHA-256 GitHub publishes, confirms it is really Wasevo Cleaner and really newer, then swaps it in and relaunches. You can turn automatic checks off or skip a version in **Settings**.
 
 ### Build from source
 
@@ -150,7 +164,6 @@ Sources/WasevoCleaner/
 ## Roadmap
 
 - Signed and notarized releases
-- Homebrew cask
 - More AI-tool and package-manager cache rules
 
 ## License

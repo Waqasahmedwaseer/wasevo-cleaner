@@ -6,7 +6,7 @@ import SwiftUI
 enum Page: String, CaseIterable, Identifiable {
     case scan = "Smart Scan", map = "Space Map", projects = "Projects", duplicates = "Duplicates"
     case photos = "Photo Cleaner", downloads = "Old Downloads", uninstaller = "Uninstaller"
-    case privacy = "Browser Privacy", startup = "Startup Items", monitor = "System Monitor"
+    case privacy = "Browser Privacy", startup = "Startup Items", monitor = "System Monitor", services = "Running Services"
     case maintenance = "Maintenance", updates = "App Updates"
     case large = "Large Files", protected = "Protected", history = "History", settings = "Settings"
     var id: String { rawValue }
@@ -22,6 +22,7 @@ enum Page: String, CaseIterable, Identifiable {
         case .privacy: return "hand.raised"
         case .startup: return "power"
         case .monitor: return "waveform.path.ecg"
+        case .services: return "server.rack"
         case .maintenance: return "wrench.and.screwdriver"
         case .updates: return "arrow.triangle.2.circlepath"
         case .large: return "doc.text.magnifyingglass"
@@ -43,6 +44,7 @@ enum Page: String, CaseIterable, Identifiable {
         case .privacy: return Color(hex: 0xD946EF)
         case .startup: return Color(hex: 0xF59E0B)
         case .monitor: return Color(hex: 0x22C55E)
+        case .services: return Color(hex: 0x10B981)
         case .maintenance: return Color(hex: 0x06B6D4)
         case .updates: return Color(hex: 0x2563EB)
         case .large: return Color(hex: 0xF97316)
@@ -53,7 +55,7 @@ enum Page: String, CaseIterable, Identifiable {
     var section: String {
         switch self {
         case .scan, .map, .projects, .duplicates, .photos, .downloads, .uninstaller: return "CLEAN"
-        case .privacy, .startup, .monitor, .maintenance, .updates: return "OPTIMIZE"
+        case .privacy, .startup, .monitor, .services, .maintenance, .updates: return "OPTIMIZE"
         case .large, .protected: return "INSPECT"
         case .history, .settings: return "APP"
         }
@@ -173,6 +175,10 @@ struct RootView: View {
                     if args.contains("--rescan") { DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { nav.rescan() } }
                 }
             }
+            // `--install-update` checks GitHub and installs a newer release (scripted update test)
+            if args.contains("--install-update") {
+                SelfUpdate.shared.check { if SelfUpdate.shared.isAvailable { SelfUpdate.shared.install() } }
+            }
             // `--preview "<file>"` opens Quick Look on a file (for scripted checks)
             if let i = args.firstIndex(of: "--preview"), i + 1 < args.count {
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) { quickLook(args[i + 1]) }
@@ -193,6 +199,7 @@ struct RootView: View {
         case .privacy: PrivacyModel.shared.load()
         case .startup: StartupModel.shared.load()
         case .updates: UpdatesModel.shared.check()
+        case .services: ServicesModel.shared.load()
         case .large: store.loadBigFiles()
         default: break
         }
@@ -245,6 +252,7 @@ struct RootView: View {
         case .privacy: PrivacyView()
         case .startup: StartupView()
         case .monitor: MonitorView()
+        case .services: ServicesView()
         case .maintenance: MaintenanceView()
         case .updates: UpdatesView()
         case .large: LargeFilesView()
@@ -343,6 +351,7 @@ struct RootView: View {
                 }
             }
             Spacer(minLength: 8)
+            SidebarUpdateBanner()
             diskMini
             Button { NSWorkspace.shared.open(WASEVO_URL) } label: {
                 HStack(spacing: 4) {
@@ -372,6 +381,7 @@ struct RootView: View {
                 .padding(.vertical, 2)
             }
             Spacer(minLength: 6)
+            RailUpdateBadge()
             ZStack {
                 Circle().stroke(W.line, lineWidth: 4)
                 Circle().trim(from: 0, to: store.usedFraction)

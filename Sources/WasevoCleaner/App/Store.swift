@@ -55,13 +55,18 @@ final class Store: ObservableObject {
     init() {
         timer = Timer.scheduledTimer(withTimeInterval: 30, repeats: true) { [weak self] _ in self?.refreshDisk() }
         autoTimer = Timer.scheduledTimer(withTimeInterval: 3600, repeats: true) { [weak self] _ in
-            self?.autoCleanIfDue(); WeeklyReport.checkDue()
+            self?.autoCleanIfDue(); WeeklyReport.checkDue(); SelfUpdate.shared.checkIfDue(); ServiceWatch.shared.check()
         }
         DispatchQueue.main.asyncAfter(deadline: .now() + 60) { [weak self] in self?.autoCleanIfDue(); WeeklyReport.checkDue() }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 8) { ServiceWatch.shared.check() }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 5) { SelfUpdate.shared.checkIfDue(atLaunch: true) }
     }
 
     func refreshDisk() {
+        let before = free
         free = volumeFree()
+        // Free space fell by 10 GB or more since the last check (30 s): often a runaway process. Look right away.
+        if before - free >= 10_000_000_000 { ServiceWatch.shared.check() }
         total = volumeTotal()
         if isLow, lastLowWarning.map({ Date().timeIntervalSince($0) > 86400 }) ?? true {
             lastLowWarning = Date()
@@ -136,7 +141,7 @@ final class Store: ObservableObject {
             self.say("Looking through your projects…")
             for a in scanProjects(snap: snap) {
                 let age = a.stale ? "untouched \(a.ageDays) days" : "edited \(a.ageDays == 0 ? "today" : "\(a.ageDays)d ago")"
-                let how = a.kind == "node_modules" ? "Reinstall with npm/pnpm install." : a.kind == "Rust target" ? "Rebuilt by cargo." : "Rebuilt on next build."
+                let how = rebuildHint(a.kind)
                 found.append(CleanItem(kind: .artifact(a), category: .projects, title: "\(a.kind) · \(a.projectLabel)",
                                        detail: "\(age). \(how)", size: a.size, risk: .safe, blocked: a.blocked,
                                        selected: a.blocked == nil && a.stale, revealPath: a.path))
@@ -205,7 +210,7 @@ final class Store: ObservableObject {
                     if let p = snap.running(r.blockIfRunning) { skipped.append("\(r.name): \(p) started"); continue }
                     failed += clearRule(r, mode)
                 case .artifact(let a):
-                    if let b = blockReason(path: a.path, project: a.project, isRust: a.kind == "Rust target", snap: snap) {
+                    if let b = blockReason(path: a.path, project: a.project, kind: a.kind, snap: snap) {
                         skipped.append("\(a.projectLabel): \(b)"); log("SKIPPED \(a.path): \(b)"); continue
                     }
                     if !removePath(a.path, mode) { failed += 1 }

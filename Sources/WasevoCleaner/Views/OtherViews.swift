@@ -176,6 +176,7 @@ struct SettingsView: View {
             PageHeader(title: "Settings", subtitle: "Tune how Wasevo Cleaner scans and cleans.")
             ScrollView {
                 VStack(spacing: 12) {
+                    UpdateCard()
                     Card {
                         VStack(alignment: .leading, spacing: 14) {
                             SettingRow("Appearance", "Light, dark, or follow your Mac.") {

@@ -4,7 +4,7 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-VERSION="0.5.0"
+VERSION="${VERSION:-0.6.0}"
 APP="dist/Wasevo Cleaner.app"
 
 # Universal binary: Apple silicon + Intel (set ARCH=native for a quick local build)

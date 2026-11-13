@@ -18,6 +18,7 @@ struct HealthGrid: View {
     @ObservedObject private var startup = StartupModel.shared
     @ObservedObject private var mon = SystemMonitor.shared
     @ObservedObject private var act = Activity.shared
+    @ObservedObject private var svc = ServiceWatch.shared
 
     private let cols = [GridItem(.flexible(), spacing: 14), GridItem(.flexible(), spacing: 14), GridItem(.flexible(), spacing: 14)]
 
@@ -35,9 +36,9 @@ struct HealthGrid: View {
             card(.monitor, "Memory",
                  value: "\(Int(Double(mon.memory.used) / Double(max(1, mon.memory.total)) * 100))%",
                  sub: "\(human(mon.memory.used)) of \(human(mon.memory.total)) in use")
-            card(.monitor, "Battery",
-                 value: mon.battery.map { "\($0.percent)%" } ?? "No battery",
-                 sub: mon.battery?.health.map { "Health \(Int($0 * 100))% · \(mon.battery?.cycles ?? 0) cycles" } ?? "Desktop Mac")
+            card(.services, "Running services",
+                 value: !svc.checked ? "Checking" : svc.held > 0 ? "\(human(svc.held)) held" : "\(svc.running) running",
+                 sub: !svc.checked ? "Servers, databases, dev servers" : svc.leftovers > 0 ? "\(svc.leftovers) left over: open to stop" : "Nothing left over")
             card(.map, "Disk",
                  value: human(store.free),
                  sub: "free of \(human(store.total))")
