@@ -21,9 +21,18 @@ Smart Scan, duplicate finder, similar photo cleaner, app uninstaller, startup it
 
 ---
 
+## What's new in 0.6.0
+
+- **Running Services.** Every local server, database, dev server and container with its ports, CPU, memory and disk writes. It flags **leftovers**: processes running from a deleted folder, or still holding deleted files. That space is used, but it is in no folder, so no disk scanner can see it. One click stops them, and a background check warns you when 2 GB or more is held.
+- **Clean all projects in one click.** Remove the rebuildable build files of every project at once, or only projects idle 14+ days. Supports node_modules, Rust `target`, PHP `vendor`, Python `.venv`, Gradle, Swift, Flutter, CocoaPods, Nuxt, Angular, Parcel, Expo, Elixir, Zig and CMake.
+- **Old editor extension versions.** VS Code, Cursor and Windsurf keep versions they already replaced; often gigabytes.
+- **One-click verified updates** from GitHub Releases, plus a Homebrew cask.
+
+[Full release notes](https://github.com/Waqasahmedwaseer/wasevo-cleaner/releases/tag/v0.6.0) · [The story behind it: my Mac lost 95 GB overnight](https://www.linkedin.com/pulse/my-mac-lost-95-gb-overnight-cleaner-could-find-heres-why-waseer-t818f/)
+
 ## Why Wasevo Cleaner
 
-"Storage almost full" on a Mac usually has a few real causes: old project build folders, package-manager caches, duplicate downloads, near-identical photos, apps you deleted that left gigabytes behind, and caches from AI tools. Most Mac cleaners either miss these or are far too eager, offering to delete things like your Docker data, database files or Android emulators as "junk".
+"Storage almost full" on a Mac usually has a few real causes: old project build folders, package-manager caches, duplicate downloads, near-identical photos, apps you deleted that left gigabytes behind, caches from AI tools, and processes that keep deleted files open (the space macOS often lumps into "System Data"). Most Mac cleaners either miss these or are far too eager, offering to delete things like your Docker data, database files or Android emulators as "junk".
 
 Wasevo Cleaner is built the other way round:
 
@@ -66,8 +75,10 @@ Wasevo Cleaner is built the other way round:
 
 ## Screenshots
 
-| Smart Scan | Space Map |
+| Running Services | Projects |
 |---|---|
+| ![Running Services finding a leftover database that holds deleted files on a Mac](docs/screenshots/running-services.jpg) | ![Projects page with one-click Clean all of node_modules and build folders](docs/screenshots/projects.jpg) |
+| **Smart Scan** | **Space Map** |
 | ![Wasevo Cleaner Smart Scan showing free disk space on a Mac](docs/screenshots/smart-scan.jpg) | ![Space Map treemap of disk usage on macOS](docs/screenshots/space-map.jpg) |
 | **Photo Cleaner** | **Uninstaller** |
 | ![Photo Cleaner grouping similar photos and keeping the sharpest](docs/screenshots/photo-cleaner.jpg) | ![Mac app uninstaller that removes leftover files](docs/screenshots/uninstaller.jpg) |
@@ -126,10 +137,11 @@ scripts/make-dmg.sh               # optional: builds the drag-to-install DMG in 
 
 1. **Allow-list, not block-list.** Only paths in the rule registry (`Sources/WasevoCleaner/Engine/Rules.swift`) or verified build folders are ever candidates.
 2. **Hard protections.** `isSafeTarget()` refuses home, Documents and Desktop roots, `.git`, and everything matched by `protectedReason()`, even if a rule is wrong.
-3. **Rebuild guard.** `node_modules` is only offered when a lockfile can reinstall it exactly, and `target` only when `Cargo.toml` exists.
+3. **Rebuild guard.** Every build folder needs the file that rebuilds it: `node_modules` a lockfile, `target` a `Cargo.toml`, PHP `vendor` a `composer.lock`, Python `.venv` a uv/poetry/pipenv/pdm lockfile, Gradle `build` a `build.gradle`. A build folder committed to git is never offered.
 4. **In-use detection.** Projects with a running dev server or open terminal, apps running from a build folder, and caches whose tool is running are skipped, and everything is re-checked right before deleting.
 5. **Tools clean themselves.** Docker, MySQL, pnpm and Homebrew are cleaned through their own commands, never by deleting their files. Docker volumes are never wiped.
 6. **Personal files go to the Trash.** Duplicates, photos, downloads and uninstalled apps can always be put back.
+7. **Stopping is not deleting.** Running Services only stops your own processes, asks them to quit first (Force stop only if they ignore it), re-checks the process is still the same program, never touches macOS system processes and never deletes a file.
 
 ## FAQ
 
@@ -139,6 +151,15 @@ It covers the same everyday jobs (cache and junk cleanup, a disk usage map, dupl
 **How do I free up disk space on my Mac safely?**
 Open Wasevo Cleaner, click **Start Smart Scan**, review the categories, untick anything you want to keep, and clean. Then check Space Map, Projects and Duplicates for the biggest wins. Nothing is removed until you confirm it.
 
+**How do I clear System Data on my Mac?**
+System Data is the space macOS can't put in a category: caches, logs, developer build files, app leftovers, and space held by processes that should have stopped. Smart Scan clears safe caches and logs, Projects clears build folders, the Uninstaller removes app leftovers, and Running Services finds processes that still hold deleted files.
+
+**Why did my Mac's storage fill up overnight?**
+Usually something kept writing while you slept: a log, a local database, a backup or a sync tool. If the space is gone and no tool can find the files, a process may be holding deleted files open. Run `lsof -nP +L1` in Terminal, or open **Running Services**, which flags these automatically.
+
+**How do I find which process is using a port?**
+Open **Running Services**. Every listening port is shown next to its process, with a Stop button.
+
 **Will it delete my Docker images, databases or emulators?**
 No. Docker data (`Docker.raw` and volumes), database files, Android emulators, `.git` folders, credentials and AI-tool logins are on the protected list and can't be deleted from the app.
 
@@ -146,28 +167,32 @@ No. Docker data (`Docker.raw` and volumes), database files, Android emulators, `
 No. Photo Cleaner only looks at image files in your normal folders.
 
 **Does it send any data anywhere?**
-No. There is no account, analytics or upload. Everything runs locally on your Mac.
+No. There is no account, analytics or upload. Everything runs locally on your Mac. The only network request is the daily update check against GitHub, which you can turn off.
 
 ## Contributing
 
-Issues and pull requests are welcome. A new cache location is one entry in `CACHE_RULES`; please include where the cache lives, what regenerates it, and which process uses it.
+Issues and pull requests are welcome. A new cache location is one entry in `CACHE_RULES`, and a new kind of project build folder is one entry in `BUILD_RULES`; please include where it lives, what regenerates it, and which process uses it. Run the self-tests with `swift build && .build/debug/WasevoCleaner --selftest`.
 
 ```
 Sources/WasevoCleaner/
-  Engine/   Rules (registry and protections), Scanner, Cleaner, SpaceMap, Projects, Duplicates, Photos,
-            Uninstaller, Browsers, LoginItems, Maintenance, Monitor, Updates, Undo, AutoClean
-  App/      WasevoCleanerApp, Store, Theme, SelfTest
-  Views/    RootView, ScanView, SpaceMapView, ProjectsView, DuplicatesView, PhotosView,
-            UninstallerView, PrivacyViews, SystemViews, Preview, OtherViews
+  Engine/   Rules (registry and protections), Scanner (build-folder rules), Cleaner, SpaceMap, Projects,
+            Duplicates, Photos, Uninstaller, Browsers, LoginItems, Maintenance, Monitor, Services,
+            Updates, SelfUpdate, Undo, AutoClean
+  App/      WasevoCleanerApp, Store, Theme, Navigation, Activity, SelfTest
+  Views/    RootView, Dashboard, ScanView, SpaceMapView, ProjectsView, ServicesView, DuplicatesView,
+            PhotosView, UninstallerView, PrivacyViews, SystemViews, UpdateViews, Preview, OtherViews
 ```
 
 ## Roadmap
 
 - Signed and notarized releases
 - More AI-tool and package-manager cache rules
+- Agent worktrees: offer clean, merged `.claude/worktrees` checkouts
+- "Disk grew" alerts: which folder grew since yesterday
+- Old Node (nvm) versions, Rust toolchains and iOS simulator runtimes, shown for review
 
 ## License
 
 [MIT](LICENSE) © Wasevo. Designed and built by Waqas Ahmed Waseer, Founder and CEO of [Wasevo](https://wasevo.com).
 
-<sub>Mac cleaner · macOS cleaner · free up disk space on Mac · storage optimizer · disk cleanup · duplicate file finder · similar photo cleaner · app uninstaller · startup items · system monitor · clear browser cache · developer disk cleaner · node_modules cleaner · CleanMyMac alternative · open source</sub>
+<sub>Mac cleaner · macOS cleaner · clear System Data on Mac · Mac storage full · running services · kill process on port · free up disk space on Mac · storage optimizer · disk cleanup · duplicate file finder · similar photo cleaner · app uninstaller · startup items · system monitor · clear browser cache · developer disk cleaner · node_modules cleaner · CleanMyMac alternative · open source</sub>
